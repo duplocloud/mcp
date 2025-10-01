@@ -1,0 +1,88 @@
+# Derived from duploctl reference with MCP server adjustments
+
+# Build & distribution artifacts
+build/
+dist/
+out/
+artifacts/
+notes-*
+*.egg-info
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+.tmp/
+
+# Local runtime/config (keep repo clean of env-specific state)
+config/
+.github/output
+.github/env
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Environment & direnv
+.envrc
+.direnv/
+
+# OS / Editor noise
+.DS_Store
+.idea/
+.qodo
+
+# VSCode workspace (keep tasks but allow committed workspace if desired)
+!.vscode/
+
+# Notebooks (none expected initially)
+notebooks/
+
+# Runner / automation scratch
+actions-runner/
+
+# Example / experimental leftovers
+stuff/
+foo.*
+
+# Requirements freeze (generated in other project; here we’ll pin via pyproject later)
+requirements.txt
+
+# Devcontainer generated overrides (allow base file, ignore potential local layering)
+.devcontainer/*.log
+
+# Logs
+*.log
+logs/
+
+# Coverage reports
+htmlcov/
+
+# Spec / generated docs (to be generated later)
+site/
+public_docs/
+
+# Temporary JSON specs or exports
+*.spec.json
+*.manifest.json
+
+# Lock files (if we later introduce tooling that generates them; adjust when chosen)
+Pipfile.lock
+poetry.lock
+
+# Security scan caches
+.bandit
+.safety
+
+# Local override config patterns
+local_settings.py
+*_local.yaml
+
+# End of file

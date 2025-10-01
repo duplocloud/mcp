@@ -1,0 +1,23 @@
+
+services:
+  mcp:
+    image: duplocloud/mcp:latest
+    container_name: mcp
+    build:
+      context: .
+      target: runner
+      args:
+        PY_VERSION: ${PY_VERSION:-3.13}
+      tags:
+      - duplocloud/mcp:latest
+      - duplocloud/mcp:${GIT_SHA:-latest}
+      - duplocloud/mcp:${GIT_REF:-latest}
+      - duplocloud/mcp:${GIT_TAG:-latest}
+      x-bake:
+        platforms:
+        - linux/amd64
+        - linux/arm64
+        cache-to: type=gha,scope=runner,mode=max
+        cache-from: type=gha,scope=runner
+    ports:
+    - 8000:8000

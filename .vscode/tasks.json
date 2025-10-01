@@ -1,0 +1,57 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "env": {
+      "PY_VERSION": "3.11"
+    }
+  },
+  "tasks": [
+    {
+      "label": "init",
+      "type": "shell",
+      "command": "./scripts/init.sh",
+      "problemMatcher": [],
+      "detail": "Create a virtual environment and install dependencies."
+    },
+    {
+      "label": "install",
+      "type": "shell",
+      "command": "pip install -e .",
+      "problemMatcher": [],
+      "detail": "Install project dependencies."
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "command": "pytest",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "detail": "Run tests with pytest."
+    },
+    {
+      "label": "run",
+      "type": "shell",
+      "command": "mcp-server",
+      "problemMatcher": [],
+      "detail": "Run the MCP server."
+    },
+    {
+      "label": "build image",
+      "type": "shell",
+      "command": "docker buildx bake",
+      "problemMatcher": [],
+      "detail": "Build Docker image using buildx bake."
+    },
+    {
+      "label": "Up",
+      "type": "shell",
+      "command": "docker compose up",
+      "problemMatcher": [],
+      "isBackground": true,
+      "detail": "Start the MCP server with docker compose (keeps terminal open)."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "eamodio.gitlens",
+    "spmeesseman.vscode-taskexplorer",
+    "ms-vscode-remote.remote-containers",
+    "github.copilot-chat",
+    "github.copilot",
+    "tamasfe.even-better-toml"
+  ]
+}
