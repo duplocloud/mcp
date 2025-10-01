@@ -30,5 +30,5 @@ COPY --from=builder /app/dist ./dist/
 RUN pip install --no-cache-dir ./dist/*.whl && \
   rm -rf ./dist
 
-# Set the command to run the server
-CMD ["python", "-m", "duplocloud.mcp"]
+# Set the command to run the server using the CLI command
+CMD ["duplocloud-mcp"]

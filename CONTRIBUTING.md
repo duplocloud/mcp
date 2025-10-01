@@ -50,38 +50,34 @@ If you are using VSCode, you can run the `init` task to set up your environment.
 
 ## Running the Application
 
-Once your environment is set up, you can run the MCP server. You can do this using Docker or directly in your terminal.
+Once your environment is set up, you can run the MCP server using the unified `Up` task in VSCode or by running the `up.sh` script directly.
 
-### Docker Usage
+### VSCode Task
 
-For a containerized development environment, you can use Docker. This ensures consistency across different machines.
-
-#### VSCode Task
-
-If you are using VSCode, you can run the `Up` task to start the application with `docker compose up`.
+If you are using VSCode, you can run the `Up` task to start the application.
 
 1.  Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
 2.  Type "Tasks: Run Task".
 3.  Select the `Up` task from the list.
+4.  You will be prompted to select a run mode (`local` or `docker`).
+5.  You will be prompted whether to rebuild the Docker image if you chose `docker` mode.
 
-This will build the Docker image and start the container. The terminal will remain open, and you can stop the service by closing the task window.
+This will start the server based on your selections.
 
-#### Manual Commands
+### Manual Script
 
-To build and run the Docker containers manually, use the following commands:
-
-```sh
-# Start the application
-docker compose up
-```
-
-### Terminal Usage
-
-After following the installation steps and activating your virtual environment, you can run the server directly.
+You can also run the `up.sh` script from your terminal.
 
 ```sh
-mcp-server
+# Run locally
+./scripts/up.sh --mode local
+
+# Run with Docker and rebuild the image
+./scripts/up.sh --mode docker --build true
 ```
+
+This provides a consistent way to start the server in different environments.
+
 
 ## Building the Application
 

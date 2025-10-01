@@ -14,36 +14,74 @@
       "detail": "Create a virtual environment and install dependencies."
     },
     {
-      "label": "install",
-      "type": "shell",
-      "command": "pip install -e .",
-      "problemMatcher": [],
-      "detail": "Install project dependencies."
-    },
-    {
-      "label": "test",
-      "type": "shell",
-      "command": "pytest",
-      "problemMatcher": [],
+      "type": "process",
+      "label": "Install",
+      "detail": "Runs the pip installation in editable mode for the development environment.",
       "group": {
-        "kind": "test",
+        "kind": "build",
         "isDefault": true
       },
-      "detail": "Run tests with pytest."
+      "icon": {
+        "color": "terminal.ansiMagenta",
+        "id": "cloud-download"
+      },
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "pip",
+        "install",
+        "--editable",
+        ".[build,test]"
+      ],
+      "problemMatcher": []
     },
     {
-      "label": "run",
-      "type": "shell",
-      "command": "mcp-server",
-      "problemMatcher": [],
-      "detail": "Run the MCP server."
+      "type": "process",
+      "label": "Pip Audit",
+      "detail": "Audits the installed packages",
+      "group": "build",
+      "icon": {
+        "color": "terminal.ansiMagenta",
+        "id": "issues"
+      },
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "pip_audit"
+      ]
     },
     {
-      "label": "build image",
+      "type": "process",
+      "label": "Lint",
+      "detail": "Does a lint check on the code with Ruff",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      },
+      "icon": {
+        "color": "terminal.ansiCyan",
+        "id": "inspect"
+      },
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m",
+        "ruff",
+        "check",
+        "./duplocloud"
+      ],
+      "problemMatcher": []
+    },
+    {
       "type": "shell",
-      "command": "docker buildx bake",
-      "problemMatcher": [],
-      "detail": "Build Docker image using buildx bake."
+      "label": "bake image",
+      "detail": "Build Docker image using buildx bake. Use for multi arch builds.",
+      "group": "build",
+      "command": "docker",
+      "args": [
+        "buildx",
+        "bake",
+        "duploctl"
+      ]
     },
     {
       "label": "Up",
@@ -51,7 +89,14 @@
       "command": "docker compose up",
       "problemMatcher": [],
       "isBackground": true,
-      "detail": "Start the MCP server with docker compose (keeps terminal open)."
+      "detail": "Start the MCP server with docker."
+    },
+    {
+      "label": "start",
+      "type": "shell",
+      "command": "${command:python.interpreterPath} -m duplocloud.mcp",
+      "problemMatcher": [],
+      "detail": "Use this when you want to run your code locally and run the code you are writing at that moment"
     }
   ]
 }

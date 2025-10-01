@@ -12,3 +12,4 @@ An emerging Model Context Protocol (MCP) server integration for DuploCloud. This
 - Model Context Protocol (spec draft): https://modelcontextprotocol.io/
 - [Fast MCP](https://gofastmcp.com/getting-started/welcome) - The base framework used to build this server.
 - [Duplocloud Generated Swagger File](https://github.com/duplocloud-internal/duplo/blob/master/ContainerManagement/generated/public/NodeStateDriverSwagger.json)
+- [Awesome Copilot](https://github.com/github/awesome-copilot) - Example repo with all the copilot chatmodes and iunstructions that inspired this setup.

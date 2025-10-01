@@ -28,10 +28,24 @@ build = [
   "toml",
   "semver",
 ]
+test = [
+  "pytest",
+  "ruff",
+  "pip-audit",
+  "pytest-black",
+  "pytest-isort",
+  "pytest-cov",
+  "pytest-dependency",
+  "pytest-order",
+  "pytest-mock",
+]
 
 [project.urls]
 Homepage = "https://github.com/duplocloud/mcp"
 Issues = "https://github.com/duplocloud/mcp/issues"
+
+[project.scripts]
+duplocloud-mcp = "duplocloud.mcp.__main__:main"
 
 [tool.setuptools]
 packages = ["duplocloud.mcp"]

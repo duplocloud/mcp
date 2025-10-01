@@ -21,3 +21,8 @@ services:
         cache-from: type=gha,scope=runner
     ports:
     - 8000:8000
+    command: ["duplocloud-mcp", "--transport", "web"]
+    environment:
+      PORT: "8000"
+    tty: true
+    stdin_open: true
