@@ -33,6 +33,7 @@ venv/
 # Environment & direnv
 .envrc
 .direnv/
+.env
 
 # OS / Editor noise
 .DS_Store

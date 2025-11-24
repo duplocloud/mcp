@@ -6,6 +6,9 @@
       "moby": false
     }
   },
+  "runArgs": [
+    "--env-file=.env"
+  ],
   "customizations": {
     "vscode": {
       "settings": {
@@ -17,6 +20,8 @@
         ],
         "python.linting.enabled": true,
         "python.linting.ruffEnabled": true,
+        "python.envFile": "${workspaceFolder}/.env",
+        "python.terminal.useEnvFile": true,
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
           "source.fixAll": "always",

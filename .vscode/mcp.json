@@ -1,6 +1,6 @@
 {
 	"servers": {
-		"my-mcp-server-a06e4109": {
+		"duplocloud-mcp": {
 			"url": "http://localhost:8000/mcp",
 			"type": "http"
 		}
