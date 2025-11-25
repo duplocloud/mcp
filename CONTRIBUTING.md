@@ -177,4 +177,15 @@ All of the commands described above have been implemented as VSCode tasks in the
 
 ### Devcontainer
 
-The `.devcontainer.json` file is included for quickly spinning up a working enviornment. This is a good way to ensure that all of the dependencies are installed and the correct version of python is being used without fighting with any nuances present in your local environment. It is highly recommended to use this as there will be the least amount of issues setting up the environment as well as getting better results when using Copilot.
+The `.devcontainer.json` file is included for quickly spinning up a working environment. This is a good way to ensure that all of the dependencies are installed and the correct version of python is being used without fighting with any nuances present in your local environment. It is highly recommended to use this as there will be the least amount of issues setting up the environment as well as getting better results when using Copilot.
+
+Before starting, you must create a `.env` file by copying `.env.example` and filling in your credentials. This file is critical for the application to run.
+
+The devcontainer automatically loads the `.env` file, making the variables available to your shell. VS Code is also configured to use this as an `envFile` for the Python extension, so debugging and terminal sessions have the correct environment. The tasks in `.vscode/tasks.json` (like `start`) rely on these environment variables to connect to DuploCloud.
+
+## Using GitHub Copilot
+
+This repository is optimized for development with GitHub Copilot.
+
+-   **Pre-configured**: The project includes instructions and prompts in the `.github/` directory to guide Copilot in understanding the codebase and development patterns.
+-   **Devcontainer/Codespaces Recommended**: It is highly recommended to use the provided Devcontainer or GitHub Codespaces. This ensures that Copilot has the correct context of the isolated Python environment, dependencies, and VS Code setup, leading to more accurate and helpful suggestions while avoiding conflicts with your local machine's configuration.

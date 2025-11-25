@@ -1,5 +1,8 @@
 import os
+import sys
 import inspect
+import argparse
+from typing import Optional, Any
 from fastmcp import FastMCP
 from importlib.metadata import version
 from duplocloud.client import DuploClient
@@ -18,23 +21,74 @@ class DuploCloudMCP():
     (for read operations) or tools (for write operations).
     """
 
-    # Define which operations are read-only (resources) vs write operations (tools)
+    # Define which operations should also be registered as resources
     READ_OPERATIONS = {'list', 'find', 'logs', 'pods'}
-    WRITE_OPERATIONS = {'create', 'update', 'delete', 'apply', 'restart', 'start', 'stop',
-                        'expose', 'rollback', 'update_replicas', 'update_image', 'update_env',
-                        'update_pod_label', 'bulk_update_image', 'update_otherdockerconfig'}
 
     def __init__(self,
+                 duplo: DuploClient,
+                 transport: str = "http",
+                 port: int = 8000,
                  name: str = "duplocloud-mcp"):
         """
         Initialize the DuploCloud MCP server.
+
+        Args:
+            duplo: The DuploCloud client instance
+            transport: The transport protocol to use (stdio or http)
+            port: The port to listen on for HTTP transport
+            name: The name of the MCP server
         """
         self.mcp = FastMCP(
             name=name,
             version=version("duplocloud-mcp"),
         )
-        duplo, args = DuploClient.from_env()
         self.duplo = duplo
+        self.transport = transport
+        self.port = port
+
+    @staticmethod
+    def from_args(args: Optional[list[str]] = None):
+        """
+        Create a DuploCloudMCP instance from command-line arguments.
+
+        The duplocloud-client handles its own arguments and returns the rest.
+        We parse the remaining arguments for MCP server configuration.
+
+        Args:
+            args: Command-line arguments (uses sys.argv if None)
+
+        Returns:
+            DuploCloudMCP: An instance of the MCP server
+        """
+        # The duplocloud-client handles its own arguments and returns the rest
+        duplo, rest = DuploClient.from_env()
+
+        # Parse the rest of the arguments for MCP server config
+        parser = argparse.ArgumentParser(
+            description="DuploCloud MCP Server",
+            prog="duplocloud-mcp"
+        )
+        parser.add_argument(
+            "--transport",
+            choices=["stdio", "http"],
+            default=os.getenv("MCP_TRANSPORT", "http"),
+            help="The transport protocol to use (default: http)"
+        )
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=int(os.getenv("PORT", os.getenv("MCP_PORT", "8000"))),
+            help="The port to listen on for HTTP transport (default: 8000)"
+        )
+
+        # Parse the remaining args
+        parsed = parser.parse_args(rest if args is None else args)
+
+        return DuploCloudMCP(
+            duplo=duplo,
+            transport=parsed.transport,
+            port=parsed.port
+        )
 
     def start(self):
         """
@@ -45,11 +99,24 @@ class DuploCloudMCP():
         formatted_info = yaml_formatter(self.duplo.config)
         logger.info(f"DuploCloud Environment Info:\n{formatted_info}")
 
-        self.mcp.run(
-            transport="http",
-            host="0.0.0.0",
-            port=int(os.getenv("PORT", 8000))
-        )
+        # Set up the run arguments.
+        run_kwargs: dict[str, Any] = {
+            "transport": self.transport
+        }
+        if self.transport == "http":
+            run_kwargs["host"] = "0.0.0.0"
+            run_kwargs["port"] = self.port
+            # Configure uvicorn to handle shutdown more gracefully
+            run_kwargs["uvicorn_config"] = {
+                "timeout_graceful_shutdown": 1
+            }
+
+        logger.info(f"Starting MCP server with transport: {self.transport}")
+        if self.transport == "http":
+            logger.info(
+                f"Server will be available at http://{run_kwargs['host']}:{run_kwargs['port']}/mcp")
+
+        return self.mcp.run(**run_kwargs)
 
     def register_tools(self):
         """
@@ -59,9 +126,9 @@ class DuploCloudMCP():
         and register them appropriately.
         """
         # Register service resource commands
-        self._register_resource_commands("service")
+        self._register_commands("service")
 
-    def _register_resource_commands(self, resource_name: str):
+    def _register_commands(self, resource_name: str):
         """
         Register all @Command decorated methods from a duploctl resource.
 
@@ -101,33 +168,27 @@ class DuploCloudMCP():
                     f"  Warning: Method '{method_name}' not found or not callable")
                 continue
 
-            # Determine if this is a read or write operation
+            # Register read operations as resources (in addition to tools)
             if method_name in self.READ_OPERATIONS:
                 self._register_as_resource(resource_name, method_name, method)
-            elif method_name in self.WRITE_OPERATIONS:
-                self._register_as_tool(resource_name, method_name, method)
-            else:
-                print(
-                    f"  Skipping '{method_name}' (not in READ_OPERATIONS or WRITE_OPERATIONS)")
+
+            # All @Command methods are registered as tools
+            self._register_as_tool(resource_name, method_name, method)
 
     def _register_as_resource(self, resource_name: str, method_name: str, method):
         """
         Register a duploctl method as an MCP resource (read-only operation).
 
-        For now, we register read operations as tools instead of resources
-        since resources require complex URI template handling. This is a 
-        simplified approach that still works.
+        Placeholder for future resource registration implementation.
+        TODO: Implement URI-based resource registration with templates.
 
         Args:
             resource_name: The duploctl resource name
             method_name: The method name
             method: The method reference with preserved signature
         """
-        # For simplicity, register read operations as tools
-        # They will still be read-only operations, just not URI-based resources
-        print(
-            f"  Registering read operation as tool: {resource_name}_{method_name}")
-        self._register_as_tool(resource_name, method_name, method)
+        # Placeholder - will implement resource registration later
+        pass
 
     def _register_as_tool(self, resource_name: str, method_name: str, method):
         """

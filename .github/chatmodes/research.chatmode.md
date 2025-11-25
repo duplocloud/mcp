@@ -1,6 +1,6 @@
 ---
 description: 'Systematically research a topic until it is fully understood.'
-tools: ['runCommands', 'runTasks', 'edit', 'runNotebooks', 'search', 'extensions', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'todos']
+tools: ['search', 'todos', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo']
 ---
 
 # Research Mode
