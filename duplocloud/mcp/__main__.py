@@ -1,3 +1,5 @@
+import asyncio
+import signal
 import sys
 import traceback
 from .server import DuploCloudMCP
@@ -22,8 +24,9 @@ def main():
         print("MCP Server ready!")
         server.start()
         return 0
-    except KeyboardInterrupt:
-        print("\nServer interrupted. Shutting down gracefully...", file=sys.stderr)
+    # nothing seems to help with the ungraceful shutdown message
+    except (KeyboardInterrupt, asyncio.CancelledError, SystemExit):
+        # Suppress shutdown errors - this is expected behavior
         return 0
     except Exception as e:
         print(f"Error starting MCP server: {e}", file=sys.stderr)

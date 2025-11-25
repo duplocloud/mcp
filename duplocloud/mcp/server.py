@@ -107,9 +107,9 @@ class DuploCloudMCP():
             run_kwargs["host"] = "0.0.0.0"
             run_kwargs["port"] = self.port
             # Configure uvicorn to handle shutdown more gracefully
-            run_kwargs["uvicorn_config"] = {
-                "timeout_graceful_shutdown": 1
-            }
+            # run_kwargs["uvicorn_config"] = {
+            #     "timeout_graceful_shutdown": 1
+            # }
 
         logger.info(f"Starting MCP server with transport: {self.transport}")
         if self.transport == "http":
