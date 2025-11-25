@@ -79,8 +79,7 @@
       "command": "docker",
       "args": [
         "buildx",
-        "bake",
-        "duploctl"
+        "bake"
       ]
     },
     {
