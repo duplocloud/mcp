@@ -16,7 +16,12 @@ classifiers = [
 ]
 authors = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
 maintainers = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
-dependencies = ["fastmcp", "duplocloud-client>=0.3.0"]
+dependencies = [
+  "fastmcp",
+  "jinja2",
+  # "duplocloud-client>=0.3.0",
+  "duplocloud-client @ git+https://github.com/duplocloud/duploctl.git@mcp-refactor",
+]
 [project.optional-dependencies]
 build = [
   "invoke",

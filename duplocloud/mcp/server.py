@@ -6,9 +6,10 @@ from typing import Optional, Any
 from fastmcp import FastMCP
 from importlib.metadata import version
 from duplocloud.client import DuploClient
-from duplocloud.commander import schema, resources, extract_args, load_format
+from duplocloud.commander import commands_for, extract_args, load_format, available_resources
 from duplocloud.argtype import Arg
 from fastmcp.utilities.logging import get_logger
+from .utils import resolve_docstring_template, get_docstring_summary
 
 logger = get_logger(__name__)
 
@@ -19,6 +20,12 @@ class DuploCloudMCP():
 
     Wraps duploctl @Command decorated methods and exposes them as MCP resources 
     (for read operations) or tools (for write operations).
+
+    This implementation uses the duploctl commander.commands_for() function to 
+    dynamically discover all commands for a resource, including those inherited 
+    from parent classes. This is simpler than manually traversing the schema and 
+    resources registries, and it automatically handles the new simplified 
+    inheritance chain in duploctl.
     """
 
     # Define which operations should also be registered as resources
@@ -118,54 +125,55 @@ class DuploCloudMCP():
 
         return self.mcp.run(**run_kwargs)
 
-    def register_tools(self):
+    def register_tools(self, resource_names: Optional[list[str]] = None):
         """
         Register DuploCloud tools and resources with the MCP.
 
-        Uses the duploctl schema to identify @Command decorated methods
-        and register them appropriately.
+        Uses the duploctl commands_for() function to get all commands for each resource.
+
+        Args:
+            resource_names: List of resource names to register. If None, registers all available resources.
         """
-        # Register service resource commands
-        self._register_commands("service")
+        # If no resources specified, register all available resources
+        if resource_names is None:
+            resource_names = available_resources()
+            logger.info(
+                f"Registering tools for all available resources: {', '.join(resource_names)}")
+
+        # Register commands for each resource
+        for resource_name in resource_names:
+            try:
+                self._register_commands(resource_name)
+            except Exception as e:
+                logger.error(
+                    f"Failed to register commands for {resource_name}: {e}")
 
     def _register_commands(self, resource_name: str):
         """
         Register all @Command decorated methods from a duploctl resource.
 
-        Uses the commander.schema to identify which methods are actual commands
-        vs helper methods.
+        Uses the commander.commands_for() function to get all commands for a resource,
+        including those inherited from parent classes.
 
         Args:
             resource_name: The name of the duploctl resource (e.g., "service", "pod", "tenant")
         """
-        # Load the duploctl resource instance
+        # Load the resource to trigger decorator registration
         resource = self.duplo.load(resource_name)
 
-        # Get the resource class info from resources registry
-        resource_info = resources.get(resource_name)
-        if not resource_info:
-            print(
-                f"Warning: Resource '{resource_name}' not found in resources registry")
-            return
+        # Get all commands for this resource using the new commands_for function
+        commands = commands_for(resource_name)
 
-        class_name = resource_info["class"]
-        print(
-            f"Registering commands for {resource_name} (class: {class_name})")
+        logger.info(f"")
+        logger.info(f"╭── 🛠️  {resource_name}")
 
-        # Iterate through the schema to find @Command decorated methods for this resource
-        for qualified_name, command_info in schema.items():
-            # The qualified_name format is "ClassName.method_name"
-            # Check if this command belongs to our resource class
-            if command_info["class"] != class_name:
-                continue
-
-            method_name = command_info["method"]
-
+        # Iterate through the commands
+        for method_name, command_info in commands.items():
             # Get the actual method from the resource instance
             method = getattr(resource, method_name, None)
             if not method or not callable(method):
-                print(
-                    f"  Warning: Method '{method_name}' not found or not callable")
+                logger.warning(
+                    f"│   ⚠️  Method '{method_name}' not found or not callable")
                 continue
 
             # Register read operations as resources (in addition to tools)
@@ -207,30 +215,34 @@ class DuploCloudMCP():
         # Extract Arg annotations
         cliargs = extract_args(method)
 
-        # If no Args, register directly
-        if not cliargs:
-            self.mcp.tool(name=tool_name)(method)
-            print(f"  Registered tool: {tool_name} (no args)")
-            return
+        # Resolve docstring templates
+        original_doc = method.__doc__ or ""
+        resolved_doc = resolve_docstring_template(original_doc, resource_name)
+
+        # Log if the docstring was changed
+        if resolved_doc != original_doc and original_doc:
+            logger.debug(
+                f"│   ├── 📝 Resolved docstring for {tool_name}:\n│   │      Original: {original_doc[:100]}...\n│   │      Resolved: {resolved_doc[:100]}...")
 
         # Build new parameters with base Python types
         new_params = []
         sig = inspect.signature(method)
 
-        for arg in cliargs:
-            # Get the original parameter
-            orig_param = sig.parameters.get(arg.__name__)
-            if not orig_param:
-                continue
+        if cliargs:
+            for arg in cliargs:
+                # Get the original parameter
+                orig_param = sig.parameters.get(arg.__name__)
+                if not orig_param:
+                    continue
 
-            # Create new parameter with base type from __supertype__
-            new_param = inspect.Parameter(
-                name=arg.__name__,
-                kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=orig_param.default if orig_param.default is not inspect.Parameter.empty else inspect.Parameter.empty,
-                annotation=arg.__supertype__  # Use the base Python type
-            )
-            new_params.append(new_param)
+                # Create new parameter with base type from __supertype__
+                new_param = inspect.Parameter(
+                    name=arg.__name__,
+                    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    default=orig_param.default if orig_param.default is not inspect.Parameter.empty else inspect.Parameter.empty,
+                    annotation=arg.__supertype__  # Use the base Python type
+                )
+                new_params.append(new_param)
 
         # Create wrapper function that returns raw structured data
         def wrapper(*args, **kwargs):
@@ -240,11 +252,20 @@ class DuploCloudMCP():
 
         # Set proper attributes
         wrapper.__name__ = tool_name
-        wrapper.__doc__ = method.__doc__
-        wrapper.__annotations__ = {p.name: p.annotation for p in new_params}
-        # Don't set return type annotation - let FastMCP infer from actual data
-        wrapper.__signature__ = inspect.Signature(new_params)
+        wrapper.__doc__ = resolved_doc
 
-        # Register with FastMCP
-        self.mcp.tool(name=tool_name)(wrapper)
-        print(f"  Registered tool: {tool_name}")
+        if cliargs:
+            wrapper.__annotations__ = {
+                p.name: p.annotation for p in new_params}
+            # Don't set return type annotation - let FastMCP infer from actual data
+            wrapper.__signature__ = inspect.Signature(new_params)
+        else:
+            # If no cliargs, preserve the original signature
+            wrapper.__signature__ = sig
+            wrapper.__annotations__ = method.__annotations__
+
+        # Register with FastMCP - pass description explicitly for FastMCP while __doc__ preserves it on wrapper
+        self.mcp.tool(name=tool_name, description=resolved_doc)(wrapper)
+
+        doc_summary = get_docstring_summary(resolved_doc)
+        logger.info(f"│   ├─── {tool_name}{doc_summary}")

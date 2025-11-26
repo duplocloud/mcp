@@ -1,6 +1,6 @@
 ---
 description: 'Generate an implementation plan for new features or refactoring existing code.'
-tools: ['duplocloud-mcp/*']
+tools: ['runTasks', 'duploctl/*']
 model: GPT-4.1 (copilot)
 ---
 
