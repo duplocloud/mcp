@@ -236,6 +236,7 @@ class DuploCloudMCP():
                     continue
 
                 # Create new parameter with base type from __supertype__
+                # cuz pydantic wasn't cool with our custom Arg types
                 new_param = inspect.Parameter(
                     name=arg.__name__,
                     kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
@@ -244,11 +245,9 @@ class DuploCloudMCP():
                 )
                 new_params.append(new_param)
 
-        # Create wrapper function that returns raw structured data
+        # Create wrapper function that returns raw structured data - FastMCP will serialize it
         def wrapper(*args, **kwargs):
-            result = method(*args, **kwargs)
-            # Return raw data - FastMCP will serialize it
-            return result
+            return method(*args, **kwargs)
 
         # Set proper attributes
         wrapper.__name__ = tool_name
@@ -267,5 +266,6 @@ class DuploCloudMCP():
         # Register with FastMCP - pass description explicitly for FastMCP while __doc__ preserves it on wrapper
         self.mcp.tool(name=tool_name, description=resolved_doc)(wrapper)
 
+        # Log the registered tool with doc summary
         doc_summary = get_docstring_summary(resolved_doc)
         logger.info(f"│   ├─── {tool_name}{doc_summary}")
