@@ -1,10 +1,13 @@
 {
   "name": "duplocloud-mcp",
-  "image": "mcr.microsoft.com/devcontainers/python:3.13",
+  "image": "mcr.microsoft.com/vscode/devcontainers/python:3-3.13",
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "moby": false
-    }
+    },
+    "ghcr.io/duplocloud/devcontainers/ai-codex:latest": {},
+    "ghcr.io/duplocloud/devcontainers/ai-claude:latest": {},
+    "ghcr.io/duplocloud/devcontainers/github:latest": {}
   },
   "runArgs": [
     "--env-file=.env"
@@ -38,10 +41,23 @@
       ]
     }
   },
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "initializeCommand": "./scripts/init.sh",
+  "postCreateCommand": "./scripts/setup.sh",
   "remoteEnv": {
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "containerEnv": {
+    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
+    "XDG_CONFIG_HOME": "${containerWorkspaceFolder}/config",
+    "CONF_DIR": "${containerWorkspaceFolder}/config",
+    "CODEX_HOME": "${containerWorkspaceFolder}/.codex",
+    "DUPLO_CONFIG": "${containerWorkspaceFolder}/config/duplo.yaml",
+    "GIT_USERNAME": "${localEnv:GIT_USERNAME}",
+    "GIT_EMAIL": "${localEnv:GIT_EMAIL}",
+    "EDITOR": "code --wait",
+    "OP_PASSWD": "${localEnv:OP_PASSWD}",
+    "JINA_API_KEY": "${localEnv:JINA_API_KEY}"
   }
   // "updateContentCommand": "ruff check . || true",
   // "waitFor": "onCreateCommand"

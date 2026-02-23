@@ -1,7 +1,3 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "duplocloud-mcp"
 description = "Model Context Protocol (MCP) server for DuploCloud."
@@ -16,12 +12,7 @@ classifiers = [
 ]
 authors = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
 maintainers = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
-dependencies = [
-  "fastmcp",
-  "jinja2",
-  # "duplocloud-client>=0.3.0",
-  "duplocloud-client @ git+https://github.com/duplocloud/duploctl.git@mcp-refactor",
-]
+dependencies = ["fastmcp", "jinja2", "duplocloud-client>=0.4.1"]
 [project.optional-dependencies]
 build = [
   "invoke",
@@ -44,6 +35,10 @@ test = [
   "pytest-order",
   "pytest-mock",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/duplocloud/mcp"

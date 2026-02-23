@@ -34,6 +34,7 @@ venv/
 .envrc
 .direnv/
 .env
+op.env
 
 # OS / Editor noise
 .DS_Store
@@ -85,5 +86,8 @@ poetry.lock
 # Local override config patterns
 local_settings.py
 *_local.yaml
+
+# logs and generated stuff
+logs.txt
 
 # End of file

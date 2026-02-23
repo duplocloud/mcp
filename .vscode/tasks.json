@@ -7,9 +7,9 @@
   },
   "tasks": [
     {
-      "label": "init",
+      "label": "setup",
       "type": "shell",
-      "command": "./scripts/init.sh",
+      "command": "./scripts/setup.sh",
       "problemMatcher": [],
       "detail": "Create a virtual environment and install dependencies."
     },
