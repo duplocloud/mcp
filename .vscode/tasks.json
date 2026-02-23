@@ -2,14 +2,14 @@
   "version": "2.0.0",
   "options": {
     "env": {
-      "PY_VERSION": "3.11"
+      "PY_VERSION": "3.13"
     }
   },
   "tasks": [
     {
-      "label": "init",
+      "label": "setup",
       "type": "shell",
-      "command": "./scripts/init.sh",
+      "command": "./scripts/setup.sh",
       "problemMatcher": [],
       "detail": "Create a virtual environment and install dependencies."
     },
@@ -79,8 +79,7 @@
       "command": "docker",
       "args": [
         "buildx",
-        "bake",
-        "duploctl"
+        "bake"
       ]
     },
     {
@@ -96,7 +95,18 @@
       "type": "shell",
       "command": "${command:python.interpreterPath} -m duplocloud.mcp",
       "problemMatcher": [],
-      "detail": "Use this when you want to run your code locally and run the code you are writing at that moment"
+      "detail": "Use this when you want to run your code locally and run the code you are writing at that moment",
+      "icon": {
+        "id": "agent",
+        "color": "terminal.ansiGreen"
+      },
+      "options": {
+        "env": {
+          "DUPLO_HOST": "${env:DUPLO_HOST}",
+          "DUPLO_TOKEN": "${env:DUPLO_TOKEN}",
+          "DUPLO_TENANT": "${env:DUPLO_TENANT}"
+        }
+      }
     }
   ]
 }

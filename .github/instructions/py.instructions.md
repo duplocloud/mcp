@@ -30,6 +30,7 @@ applyTo: '**/*.py'
 - Ensure lines do not exceed 79 characters.
 - Place function and class docstrings immediately after the `def` or `class` keyword.
 - Use blank lines to separate functions, classes, and code blocks where appropriate.
+- Imports always go on top of the file, never just randomly in a function or code block.
 
 ## Edge Cases and Testing
 

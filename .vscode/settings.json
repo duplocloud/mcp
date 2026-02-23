@@ -1,5 +1,32 @@
 {
-    "workbench.colorTheme": "Bearded Theme feat. Gold D Raynh",
+    // "workbench.colorTheme": "Bearded Theme Altica",
+    "workbench.colorTheme": "Bearded Theme Milkshake Mango",
     "workbench.iconTheme": "bearded-icons",
-    "python.analysis.typeCheckingMode": "standard"
+    "python.analysis.typeCheckingMode": "standard",
+    "peacock.color": "#51615f",
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#687d7a",
+        "activityBar.background": "#687d7a",
+        "activityBar.foreground": "#e7e7e7",
+        "activityBar.inactiveForeground": "#e7e7e799",
+        "activityBarBadge.background": "#d69fdf",
+        "activityBarBadge.foreground": "#15202b",
+        "commandCenter.border": "#e7e7e799",
+        "sash.hoverBorder": "#687d7a",
+        "statusBar.background": "#51615f",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#687d7a",
+        "statusBarItem.remoteBackground": "#51615f",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "titleBar.activeBackground": "#51615f",
+        "titleBar.activeForeground": "#e7e7e7",
+        "titleBar.inactiveBackground": "#51615f99",
+        "titleBar.inactiveForeground": "#e7e7e799"
+    },
+    "peacock.remoteColor": "#6f4572",
+    "taskexplorer.exclude": [
+        "**/.venv/**",
+        "**/__pycache__/**",
+        "**/.direnv/**",
+    ]
 }

@@ -1,6 +1,8 @@
-import os
-from .server import create_server
+import asyncio
+import signal
 import sys
+import traceback
+from .server import DuploCloudMCP
 
 
 def main():
@@ -12,18 +14,23 @@ def main():
     """
     try:
         print("Starting DuploCloud MCP Server...")
-        server = create_server()
-        server.run(
-            transport="http",
-            host="0.0.0.0",
-            port=int(os.getenv("PORT", 8000))
-        )
+        server = DuploCloudMCP.from_args()
+
+        # Register all tools and resources
+        print("Registering DuploCloud tools and resources...")
+        server.register_tools()
+
+        # Start the server
+        print("MCP Server ready!")
+        server.start()
         return 0
-    except KeyboardInterrupt:
-        print("\nServer interrupted. Shutting down...")
+    # nothing seems to help with the ungraceful shutdown message
+    except (KeyboardInterrupt, asyncio.CancelledError, SystemExit):
+        # Suppress shutdown errors - this is expected behavior
         return 0
     except Exception as e:
         print(f"Error starting MCP server: {e}", file=sys.stderr)
+        traceback.print_exc()
         return 1
 
 
