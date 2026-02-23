@@ -12,6 +12,21 @@
   "runArgs": [
     "--env-file=.env"
   ],
+  "initializeCommand": "./scripts/init.sh",
+  "postCreateCommand": "./scripts/setup.sh",
+  "remoteEnv": {
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "containerEnv": {
+    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
+    "XDG_CONFIG_HOME": "${containerWorkspaceFolder}/config",
+    "CONF_DIR": "${containerWorkspaceFolder}/config",
+    "CODEX_HOME": "${containerWorkspaceFolder}/.codex",
+    "DUPLO_CONFIG": "${containerWorkspaceFolder}/config/duplo.yaml",
+    "EDITOR": "code --wait",
+    "JINA_API_KEY": "${localEnv:JINA_API_KEY}"
+  },
   "customizations": {
     "vscode": {
       "settings": {
@@ -40,25 +55,5 @@
         "tamasfe.even-better-toml"
       ]
     }
-  },
-  "initializeCommand": "./scripts/init.sh",
-  "postCreateCommand": "./scripts/setup.sh",
-  "remoteEnv": {
-    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-    "PYTHONDONTWRITEBYTECODE": "1"
-  },
-  "containerEnv": {
-    "WORKSPACE_FOLDER": "${containerWorkspaceFolder}",
-    "XDG_CONFIG_HOME": "${containerWorkspaceFolder}/config",
-    "CONF_DIR": "${containerWorkspaceFolder}/config",
-    "CODEX_HOME": "${containerWorkspaceFolder}/.codex",
-    "DUPLO_CONFIG": "${containerWorkspaceFolder}/config/duplo.yaml",
-    "GIT_USERNAME": "${localEnv:GIT_USERNAME}",
-    "GIT_EMAIL": "${localEnv:GIT_EMAIL}",
-    "EDITOR": "code --wait",
-    "OP_PASSWD": "${localEnv:OP_PASSWD}",
-    "JINA_API_KEY": "${localEnv:JINA_API_KEY}"
   }
-  // "updateContentCommand": "ruff check . || true",
-  // "waitFor": "onCreateCommand"
 }
