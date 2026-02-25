@@ -91,9 +91,12 @@
       "detail": "Start the MCP server with docker."
     },
     {
-      "label": "start",
+      "label": "start-expanded",
       "type": "shell",
-      "command": "${command:python.interpreterPath} -m duplocloud.mcp",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m", "duplocloud.mcp"
+      ],
       "problemMatcher": [],
       "detail": "Use this when you want to run your code locally and run the code you are writing at that moment",
       "icon": {
@@ -104,7 +107,31 @@
         "env": {
           "DUPLO_HOST": "${env:DUPLO_HOST}",
           "DUPLO_TOKEN": "${env:DUPLO_TOKEN}",
-          "DUPLO_TENANT": "${env:DUPLO_TENANT}"
+          "DUPLO_TENANT": "${env:DUPLO_TENANT}",
+          "DUPLO_MCP_RESOURCE_FILTER": "tenant",
+          "DUPLO_MCP_TOOL_MODE": "expanded"
+        }
+      }
+    },
+    {
+      "label": "start-compacted",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m", "duplocloud.mcp"
+      ],
+      "problemMatcher": [],
+      "detail": "Use this when you want to run your code locally and run the code you are writing at that moment",
+      "icon": {
+        "id": "agent",
+        "color": "terminal.ansiGreen"
+      },
+      "options": {
+        "env": {
+          "DUPLO_HOST": "${env:DUPLO_HOST}",
+          "DUPLO_TOKEN": "${env:DUPLO_TOKEN}",
+          "DUPLO_TENANT": "${env:DUPLO_TENANT}",
+          "DUPLO_MCP_TOOL_MODE": "compact"
         }
       }
     }

@@ -1,271 +1,258 @@
-import os
-import sys
+"""DuploCloud MCP server lifecycle coordinator.
+
+DuploCloudMCP knows about transport, ports, and which resources to register.
+It does not know how tool wrapping, signature rewriting, or model resolution
+works -- that is delegated to ToolRegistrar.
+"""
+
 import inspect
-import argparse
-from typing import Optional, Any
-from fastmcp import FastMCP
-from importlib.metadata import version
+import re
+from typing import Any, Optional
+
 from duplocloud.client import DuploClient
-from duplocloud.commander import commands_for, extract_args, load_format, available_resources
-from duplocloud.argtype import Arg
+from duplocloud.commander import available_resources, load_format
+from fastmcp import FastMCP
 from fastmcp.utilities.logging import get_logger
-from .utils import resolve_docstring_template, get_docstring_summary
+
+from .app import mcp as mcp_app
+from .args import build_parser
+from .ctx import Ctx, drain_routes, drain_tools
+from .tools import ToolRegistrar
+
+# Import modules that use @custom_tool / @custom_route so
+# the registry is populated before register_custom() drains it.
+from . import config_display as _  # noqa: F401
+from . import compact_tools as __  # noqa: F401
 
 logger = get_logger(__name__)
 
 
-class DuploCloudMCP():
-    """
-    DuploCloud MCP wrapper for duploctl commands.
+class DuploCloudMCP:
+    """DuploCloud MCP server.
 
-    Wraps duploctl @Command decorated methods and exposes them as MCP resources 
-    (for read operations) or tools (for write operations).
-
-    This implementation uses the duploctl commander.commands_for() function to 
-    dynamically discover all commands for a resource, including those inherited 
-    from parent classes. This is simpler than manually traversing the schema and 
-    resources registries, and it automatically handles the new simplified 
-    inheritance chain in duploctl.
+    Thin coordinator that owns server lifecycle: argument parsing, resource
+    filtering, tool registration delegation, and transport startup.
     """
 
-    # Define which operations should also be registered as resources
-    READ_OPERATIONS = {'list', 'find', 'logs', 'pods'}
-
-    def __init__(self,
-                 duplo: DuploClient,
-                 transport: str = "http",
-                 port: int = 8000,
-                 name: str = "duplocloud-mcp"):
-        """
-        Initialize the DuploCloud MCP server.
+    def __init__(
+        self,
+        mcp: FastMCP,
+        duplo: DuploClient,
+        transport: str = "http",
+        port: int = 8000,
+        resource_filter: str = ".*",
+        command_filter: str = ".*",
+        tool_mode: str = "expanded",
+    ):
+        """Initialize the server.
 
         Args:
-            duplo: The DuploCloud client instance
-            transport: The transport protocol to use (stdio or http)
-            port: The port to listen on for HTTP transport
-            name: The name of the MCP server
+            mcp: The FastMCP instance.
+            duplo: The DuploCloud client instance.
+            transport: Transport protocol ("stdio" or "http").
+            port: Port for HTTP transport.
+            resource_filter: Regex pattern for resource names to include.
+            command_filter: Regex pattern for command names to include.
+            tool_mode: Tool registration mode ("expanded" or "compact").
         """
-        self.mcp = FastMCP(
-            name=name,
-            version=version("duplocloud-mcp"),
-        )
+        self.mcp = mcp
         self.duplo = duplo
         self.transport = transport
         self.port = port
+        self.resource_filter = re.compile(resource_filter)
+        self.command_filter = re.compile(command_filter)
+        self.tool_mode = tool_mode
+        self._filtered_resources: list[str] = []
 
     @staticmethod
     def from_args(args: Optional[list[str]] = None):
-        """
-        Create a DuploCloudMCP instance from command-line arguments.
+        """Create a DuploCloudMCP instance from CLI arguments.
 
-        The duplocloud-client handles its own arguments and returns the rest.
-        We parse the remaining arguments for MCP server configuration.
+        DuploClient handles its own arguments and returns the rest.
+        The remaining arguments are parsed for MCP server configuration.
 
         Args:
-            args: Command-line arguments (uses sys.argv if None)
+            args: CLI arguments (uses sys.argv if None).
 
         Returns:
-            DuploCloudMCP: An instance of the MCP server
+            A configured DuploCloudMCP instance.
         """
-        # The duplocloud-client handles its own arguments and returns the rest
         duplo, rest = DuploClient.from_env()
 
-        # Parse the rest of the arguments for MCP server config
-        parser = argparse.ArgumentParser(
-            description="DuploCloud MCP Server",
-            prog="duplocloud-mcp"
-        )
-        parser.add_argument(
-            "--transport",
-            choices=["stdio", "http"],
-            default=os.getenv("MCP_TRANSPORT", "http"),
-            help="The transport protocol to use (default: http)"
-        )
-        parser.add_argument(
-            "--port",
-            type=int,
-            default=int(os.getenv("PORT", os.getenv("MCP_PORT", "8000"))),
-            help="The port to listen on for HTTP transport (default: 8000)"
-        )
-
-        # Parse the remaining args
+        parser = build_parser()
         parsed = parser.parse_args(rest if args is None else args)
 
         return DuploCloudMCP(
+            mcp=mcp_app,
             duplo=duplo,
             transport=parsed.transport,
-            port=parsed.port
+            port=parsed.port,
+            resource_filter=parsed.resource_filter,
+            command_filter=parsed.command_filter,
+            tool_mode=parsed.tool_mode,
         )
 
+    def register_tools(self, resource_names: Optional[list[str]] = None):
+        """Register DuploCloud tools with the MCP server.
+
+        If resource_names is None, discovers all available resources.
+        Applies the resource filter before delegating to ToolRegistrar.
+
+        Args:
+            resource_names: Explicit list of resources, or None for all.
+        """
+        if resource_names is None:
+            resource_names = available_resources()
+
+        # Apply resource filter
+        filtered = [
+            name for name in resource_names
+            if self.resource_filter.fullmatch(name)
+        ]
+
+        skipped = set(resource_names) - set(filtered)
+        if skipped:
+            for name in sorted(skipped):
+                logger.debug(f"Skipping resource '{name}' (resource filter)")
+
+        self._filtered_resources = sorted(filtered)
+        logger.info(f"Registering tools for: {', '.join(self._filtered_resources)}")
+
+        if self.tool_mode == "compact":
+            logger.info("Compact mode: tools provided by custom tools (execute, explain, resources)")
+        else:
+            registrar = ToolRegistrar(self.mcp, self.duplo, self.command_filter)
+            registrar.register(filtered)
+
+        # Register custom tools and routes, injecting context
+        self.register_custom(mode=self.tool_mode)
+
+    def register_custom(self, mode: Optional[str] = None):
+        """Drain the custom tool/route registries and register them.
+
+        Builds a Ctx from current server state, then wraps each registered
+        function so Ctx (and Request for routes) are injected automatically.
+        The wrapper's visible signature is the original minus the ``ctx``
+        parameter, so FastMCP only sees the user-facing parameters.
+
+        Args:
+            mode: Only register entries matching this mode (None = all).
+        """
+        ctx = self._build_ctx()
+
+        # --- custom tools ---
+        for entry in drain_tools(mode):
+            fn = entry["fn"]
+            tool_name = entry["name"]
+            description = entry["description"]
+
+            # Build a wrapper that injects ctx, hiding it from FastMCP
+            wrapper = self._inject_ctx(fn, ctx)
+            self.mcp.tool(name=tool_name, description=description or None)(wrapper)
+            logger.info(f"    {tool_name} (custom)")
+
+        # --- custom routes ---
+        for entry in drain_routes(mode):
+            fn = entry["fn"]
+            path = entry["path"]
+            methods = entry["methods"]
+
+            # Route wrapper: inject ctx, pass request through
+            async def route_handler(request, _fn=fn, _ctx=ctx):
+                return await _fn(_ctx, request)
+
+            self.mcp.custom_route(path, methods=methods)(route_handler)
+            logger.info(f"    route {path} (custom)")
+
+    def _build_ctx(self) -> Ctx:
+        """Build a Ctx snapshot from current server state."""
+        return Ctx(
+            duplo=self.duplo,
+            config={
+                "transport": self.transport,
+                "port": self.port,
+                "resource_filter": self.resource_filter.pattern,
+                "command_filter": self.command_filter.pattern,
+                "tool_mode": self.tool_mode,
+            },
+            tools=self._list_tool_names(),
+            resources=list(self._filtered_resources),
+        )
+
+    def _list_tool_names(self) -> list[str]:
+        """Collect names of all tools currently registered on the FastMCP instance."""
+        import asyncio
+
+        async def _get():
+            return [t.name for t in await self.mcp.list_tools()]
+
+        # If there's already a running loop, schedule on it; otherwise run fresh
+        try:
+            loop = asyncio.get_running_loop()
+            # We're inside an event loop already — create a task
+            future = asyncio.ensure_future(_get())
+            # This path shouldn't happen during startup, but handle it
+            return []
+        except RuntimeError:
+            return asyncio.run(_get())
+
+    @staticmethod
+    def _inject_ctx(fn, ctx: Ctx):
+        """Wrap fn so that ctx is injected and hidden from FastMCP.
+
+        Removes the ``ctx`` parameter from the wrapper's signature so
+        FastMCP only sees the remaining user-facing parameters.
+
+        Args:
+            fn: The function to wrap (must accept ctx as first arg).
+            ctx: The context to inject.
+
+        Returns:
+            A wrapper with ctx-free signature.
+        """
+        sig = inspect.signature(fn)
+        # Remove 'ctx' from the visible signature
+        new_params = [
+            p for p in sig.parameters.values()
+            if p.name != "ctx"
+        ]
+
+        def wrapper(*args, **kwargs):
+            return fn(ctx, *args, **kwargs)
+
+        wrapper.__name__ = fn.__name__
+        wrapper.__doc__ = fn.__doc__
+        wrapper.__signature__ = sig.replace(parameters=new_params)
+        wrapper.__annotations__ = {
+            p.name: p.annotation
+            for p in new_params
+            if p.annotation is not inspect.Parameter.empty
+        }
+        return wrapper
+
     def start(self):
+        """Start the MCP server.
+
+        Logs environment info and active filters, then runs the transport.
         """
-        Start the MCP server.
-        """
-        # Log environment details
         yaml_formatter = load_format("yaml")
         formatted_info = yaml_formatter(self.duplo.config)
         logger.info(f"DuploCloud Environment Info:\n{formatted_info}")
 
-        # Set up the run arguments.
-        run_kwargs: dict[str, Any] = {
-            "transport": self.transport
-        }
+        # Log active filters if non-default
+        logger.info(f"Tool mode: {self.tool_mode}")
+        if self.resource_filter.pattern != ".*":
+            logger.info(f"Resource filter: {self.resource_filter.pattern}")
+        if self.command_filter.pattern != ".*":
+            logger.info(f"Command filter: {self.command_filter.pattern}")
+
+        run_kwargs: dict[str, Any] = {"transport": self.transport}
         if self.transport == "http":
             run_kwargs["host"] = "0.0.0.0"
             run_kwargs["port"] = self.port
-            # Configure uvicorn to handle shutdown more gracefully
-            # run_kwargs["uvicorn_config"] = {
-            #     "timeout_graceful_shutdown": 1
-            # }
 
         logger.info(f"Starting MCP server with transport: {self.transport}")
         if self.transport == "http":
-            logger.info(
-                f"Server will be available at http://{run_kwargs['host']}:{run_kwargs['port']}/mcp")
+            logger.info(f"Server at http://0.0.0.0:{self.port}/mcp")
 
         return self.mcp.run(**run_kwargs)
-
-    def register_tools(self, resource_names: Optional[list[str]] = None):
-        """
-        Register DuploCloud tools and resources with the MCP.
-
-        Uses the duploctl commands_for() function to get all commands for each resource.
-
-        Args:
-            resource_names: List of resource names to register. If None, registers all available resources.
-        """
-        # If no resources specified, register all available resources
-        if resource_names is None:
-            resource_names = available_resources()
-            logger.info(
-                f"Registering tools for all available resources: {', '.join(resource_names)}")
-
-        # Register commands for each resource
-        for resource_name in resource_names:
-            try:
-                self._register_commands(resource_name)
-            except Exception as e:
-                logger.error(
-                    f"Failed to register commands for {resource_name}: {e}")
-
-    def _register_commands(self, resource_name: str):
-        """
-        Register all @Command decorated methods from a duploctl resource.
-
-        Uses the commander.commands_for() function to get all commands for a resource,
-        including those inherited from parent classes.
-
-        Args:
-            resource_name: The name of the duploctl resource (e.g., "service", "pod", "tenant")
-        """
-        # Load the resource to trigger decorator registration
-        resource = self.duplo.load(resource_name)
-
-        # Get all commands for this resource using the new commands_for function
-        commands = commands_for(resource_name)
-
-        logger.info(f"")
-        logger.info(f"╭── 🛠️  {resource_name}")
-
-        # Iterate through the commands
-        for method_name, command_info in commands.items():
-            # Get the actual method from the resource instance
-            method = getattr(resource, method_name, None)
-            if not method or not callable(method):
-                logger.warning(
-                    f"│   ⚠️  Method '{method_name}' not found or not callable")
-                continue
-
-            # Register read operations as resources (in addition to tools)
-            if method_name in self.READ_OPERATIONS:
-                self._register_as_resource(resource_name, method_name, method)
-
-            # All @Command methods are registered as tools
-            self._register_as_tool(resource_name, method_name, method)
-
-    def _register_as_resource(self, resource_name: str, method_name: str, method):
-        """
-        Register a duploctl method as an MCP resource (read-only operation).
-
-        Placeholder for future resource registration implementation.
-        TODO: Implement URI-based resource registration with templates.
-
-        Args:
-            resource_name: The duploctl resource name
-            method_name: The method name
-            method: The method reference with preserved signature
-        """
-        # Placeholder - will implement resource registration later
-        pass
-
-    def _register_as_tool(self, resource_name: str, method_name: str, method):
-        """
-        Register a duploctl method as an MCP tool (write operation).
-
-        Creates a wrapper function that converts Arg types to standard Python types
-        so FastMCP/Pydantic can properly introspect and validate them.
-
-        Args:
-            resource_name: The duploctl resource name
-            method_name: The method name
-            method: The method reference with preserved signature
-        """
-        tool_name = f"{resource_name}_{method_name}"
-
-        # Extract Arg annotations
-        cliargs = extract_args(method)
-
-        # Resolve docstring templates
-        original_doc = method.__doc__ or ""
-        resolved_doc = resolve_docstring_template(original_doc, resource_name)
-
-        # Log if the docstring was changed
-        if resolved_doc != original_doc and original_doc:
-            logger.debug(
-                f"│   ├── 📝 Resolved docstring for {tool_name}:\n│   │      Original: {original_doc[:100]}...\n│   │      Resolved: {resolved_doc[:100]}...")
-
-        # Build new parameters with base Python types
-        new_params = []
-        sig = inspect.signature(method)
-
-        if cliargs:
-            for arg in cliargs:
-                # Get the original parameter
-                orig_param = sig.parameters.get(arg.__name__)
-                if not orig_param:
-                    continue
-
-                # Create new parameter with base type from __supertype__
-                # cuz pydantic wasn't cool with our custom Arg types
-                new_param = inspect.Parameter(
-                    name=arg.__name__,
-                    kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    default=orig_param.default if orig_param.default is not inspect.Parameter.empty else inspect.Parameter.empty,
-                    annotation=arg.__supertype__  # Use the base Python type
-                )
-                new_params.append(new_param)
-
-        # Create wrapper function that returns raw structured data - FastMCP will serialize it
-        def wrapper(*args, **kwargs):
-            return method(*args, **kwargs)
-
-        # Set proper attributes
-        wrapper.__name__ = tool_name
-        wrapper.__doc__ = resolved_doc
-
-        if cliargs:
-            wrapper.__annotations__ = {
-                p.name: p.annotation for p in new_params}
-            # Don't set return type annotation - let FastMCP infer from actual data
-            wrapper.__signature__ = inspect.Signature(new_params)
-        else:
-            # If no cliargs, preserve the original signature
-            wrapper.__signature__ = sig
-            wrapper.__annotations__ = method.__annotations__
-
-        # Register with FastMCP - pass description explicitly for FastMCP while __doc__ preserves it on wrapper
-        self.mcp.tool(name=tool_name, description=resolved_doc)(wrapper)
-
-        # Log the registered tool with doc summary
-        doc_summary = get_docstring_summary(resolved_doc)
-        logger.info(f"│   ├─── {tool_name}{doc_summary}")
