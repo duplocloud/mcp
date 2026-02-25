@@ -188,9 +188,9 @@ class DuploCloudMCP:
 
         # If there's already a running loop, schedule on it; otherwise run fresh
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             # We're inside an event loop already — create a task
-            future = asyncio.ensure_future(_get())
+            asyncio.ensure_future(_get())
             # This path shouldn't happen during startup, but handle it
             return []
         except RuntimeError:
