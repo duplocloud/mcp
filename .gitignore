@@ -90,4 +90,7 @@ local_settings.py
 # logs and generated stuff
 logs.txt
 
+# ai stuff
+.codex/
+
 # End of file

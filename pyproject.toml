@@ -12,13 +12,18 @@ classifiers = [
 ]
 authors = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
 maintainers = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
-dependencies = ["fastmcp", "jinja2", "duplocloud-client>=0.4.1"]
+dependencies = [
+  "fastmcp>=2.14.0,<4",
+  "authlib>=1.6.6",
+  "jinja2",
+  "duplocloud-client @ git+https://github.com/duplocloud/duploctl.git@main",
+]
 [project.optional-dependencies]
 build = [
   "invoke",
   "setuptools_scm",
   "build",
-  "wheel",
+  "wheel>=0.46.2",
   "twine",
   "pyinstaller",
   "toml",
@@ -26,14 +31,10 @@ build = [
 ]
 test = [
   "pytest",
-  "ruff",
-  "pip-audit",
-  "pytest-black",
-  "pytest-isort",
-  "pytest-cov",
-  "pytest-dependency",
-  "pytest-order",
+  "pytest-asyncio",
   "pytest-mock",
+  "pytest-cov",
+  "ruff",
 ]
 
 [build-system]
@@ -49,3 +50,13 @@ duplocloud-mcp = "duplocloud.mcp.__main__:main"
 
 [tool.setuptools]
 packages = ["duplocloud.mcp"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+asyncio_mode = "auto"
+addopts = "--verbose"
+testpaths = ["tests"]
+markers = [
+  "unit: mark a test as a unit test",
+  "integration: mark a test as an integration test",
+]

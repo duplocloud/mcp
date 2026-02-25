@@ -8,3 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Initial project scaffolding.
+- binding with duploctl
+- uses types from underlying generated openapi stuff
+- filterable resources and commands when turning the server on
+- compact and expanded mode
