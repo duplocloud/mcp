@@ -8,8 +8,9 @@ WORKDIR /app
 # Copy the source code
 COPY . .
 
-# Install build dependencies
+# Install git and build dependencies
 RUN <<EOF
+apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 pip install --no-cache-dir --upgrade pip
 pip install --no-cache-dir .[build]
 EOF
@@ -26,7 +27,8 @@ WORKDIR /app
 # Copy the built package from the previous stage
 COPY --from=builder /app/dist ./dist/
 
-# Install the package using pip
+# Install git and the package using pip
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir ./dist/*.whl && \
   rm -rf ./dist
 

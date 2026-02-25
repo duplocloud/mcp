@@ -1,18 +1,8 @@
-name: Publish Image
+name: 🎺 Publish Image
 
 on:
-  workflow_dispatch: 
-    inputs:
-      push:
-        description: Push the image to the registry
-        required: false
-        default: false
-        type: boolean
-      tag:
-        description: The git tag to build on
-        required: false
-        type: string
-  workflow_call: 
+  workflow_dispatch: {}
+  workflow_call:
     inputs:
       push:
         description: Push the image to the registry
@@ -21,7 +11,7 @@ on:
         type: boolean
       tag:
         description: The git tag to build on
-        required: true
+        required: false
         type: string
     outputs:
       image:
@@ -30,21 +20,20 @@ on:
     secrets:
       DOCKER_USERNAME:
         description: Docker username
-        required: true
+        required: false
       DOCKER_PASSWORD:
         description: Docker password
-        required: true
+        required: false
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   build_image:
     name: Image
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.build_image.outputs.uri }}
-    environment: 
-      name: dockerhub
-      url: https://hub.docker.com/r/duplocloud/mcp
+    environment:
+      name: ${{ inputs.push && 'dockerhub' || '' }}
+      url: ${{ inputs.push && 'https://hub.docker.com/r/duplocloud/mcp' || '' }}
     env:
       PY_VERSION: "3.13"
     steps:
@@ -66,6 +55,7 @@ jobs:
       with:
         type: bake
         target: mcp
+        repo: duplocloud/mcp
         push: ${{ inputs.push }}
         docker-username: ${{ secrets.DOCKER_USERNAME }}
         docker-password: ${{ secrets.DOCKER_PASSWORD }}

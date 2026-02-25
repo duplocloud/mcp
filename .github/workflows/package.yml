@@ -1,0 +1,62 @@
+name: 🗿 Python Package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to build
+        required: false
+        type: string
+    outputs:
+      version:
+        description: The true version of the package
+        value: ${{ jobs.package.outputs.version }}
+      package:
+        description: The package artifact name
+        value: ${{ jobs.package.outputs.package }}
+
+jobs:
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check_version.outputs.version }}
+      package: ${{ steps.check_version.outputs.package }}
+    steps:
+
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag }}
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        cache: pip
+
+    - name: Install Dependencies
+      run: pip install ".[build]"
+
+    - name: Check True Version
+      id: check_version
+      run: |
+        version=$(python -m setuptools_scm)
+        package="duplocloud_mcp-${version}"
+        echo "Building Version: $version"
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "package=$package" >> $GITHUB_OUTPUT
+
+    - name: Run the Build
+      run: python -m build
+
+    - name: Show Files
+      run: ls -l dist
+
+    - name: Github Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.check_version.outputs.package }}
+        path: dist/*.tar.gz
