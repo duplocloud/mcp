@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Updated GitHub workflow action versions to current stable tags (artifact actions, Docker Hub description, and auto-assign).
+
 ## [0.0.2] - 2026-02-26
 
 - Initial project scaffolding.
