@@ -16,14 +16,18 @@ jobs:
 
     steps:
 
-    - name: Setup
-      id: setup
-      uses: duplocloud/mcp/.github/actions/setup@main
+    - name: Checkout Code
+      uses: actions/checkout@v6
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-        app-id: ${{ vars.GH_APP_ID }}
-        private-key: ${{ secrets.GH_APP_KEY }}
-        install: .[test]
+        cache: pip
+        cache-dependency-path: pyproject.toml
+
+    - name: Install Dependencies
+      run: pip install .[test]
 
     - name: Lint with ruff
       run: ruff check ./duplocloud

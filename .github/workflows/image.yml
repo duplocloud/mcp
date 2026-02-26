@@ -38,14 +38,10 @@ jobs:
       PY_VERSION: "3.13"
     steps:
 
-    - name: Setup
-      id: setup
-      uses: duplocloud/mcp/.github/actions/setup@main
+    - name: Checkout Code
+      uses: actions/checkout@v6
       with:
         ref: ${{ inputs.tag }}
-        app-id: ${{ vars.GH_APP_ID }}
-        private-key: ${{ secrets.GH_APP_KEY }}
-        install: false
 
     - name: Build and Push Docker Image
       id: build_image

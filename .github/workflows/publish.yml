@@ -24,7 +24,6 @@ jobs:
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    secrets: inherit
 
   version:
     name: Version
