@@ -16,17 +16,14 @@ jobs:
 
     steps:
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    - name: Setup
+      id: setup
+      uses: .github/actions/setup@main
       with:
         python-version: ${{ matrix.python-version }}
-        cache: pip
-
-    - name: Install Dependencies
-      run: pip install ".[test]"
+        app-id: ${{ vars.GH_APP_ID }}
+        private-key: ${{ secrets.GH_APP_KEY }}
+        install: .[test]
 
     - name: Lint with ruff
       run: ruff check ./duplocloud

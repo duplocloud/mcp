@@ -24,6 +24,7 @@ jobs:
   test:
     name: Test
     uses: ./.github/workflows/test.yml
+    secrets: inherit
 
   version:
     name: Version
@@ -35,13 +36,6 @@ jobs:
       release-notes: ${{ steps.bump.outputs.release-notes }}
     steps:
 
-    - name: Create GitHub App Token
-      id: app-token
-      uses: actions/create-github-app-token@v1
-      with:
-        app-id: ${{ vars.GH_APP_ID }}
-        private-key: ${{ secrets.GH_APP_KEY }}
-
     - name: Validate Branch
       if: inputs.push
       run: |
@@ -50,8 +44,15 @@ jobs:
           exit 1
         fi
 
+    - name: Create GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ vars.GH_APP_ID }}
+        private-key: ${{ secrets.GH_APP_KEY }}
+
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         token: ${{ steps.app-token.outputs.token }}
@@ -95,7 +96,7 @@ jobs:
 
     - name: Create GitHub App Token
       id: app-token
-      uses: actions/create-github-app-token@v1
+      uses: actions/create-github-app-token@v2
       with:
         app-id: ${{ vars.GH_APP_ID }}
         private-key: ${{ secrets.GH_APP_KEY }}
@@ -112,7 +113,7 @@ jobs:
         echo "badge=${BADGE}" >> "$GITHUB_OUTPUT"
 
     - name: Download Package Artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         name: ${{ needs.package.outputs.package }}
         path: dist

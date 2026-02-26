@@ -25,20 +25,15 @@ jobs:
       package: ${{ steps.check_version.outputs.package }}
     steps:
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - name: Setup
+      id: setup
+      uses: .github/actions/setup@main
       with:
         ref: ${{ inputs.tag }}
         fetch-depth: 0
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.13"
-        cache: pip
-
-    - name: Install Dependencies
-      run: pip install ".[build]"
+        app-id: ${{ vars.GH_APP_ID }}
+        private-key: ${{ secrets.GH_APP_KEY }}
+        install: .[build]
 
     - name: Check True Version
       id: check_version
@@ -56,7 +51,7 @@ jobs:
       run: ls -l dist
 
     - name: Github Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.check_version.outputs.package }}
         path: dist/*.tar.gz

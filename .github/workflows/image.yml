@@ -40,12 +40,12 @@ jobs:
 
     - name: Setup
       id: setup
-      uses: duplocloud/mcp/.github/actions/setup@main
+      uses: .github/actions/setup@main
       with:
         ref: ${{ inputs.tag }}
         app-id: ${{ vars.GH_APP_ID }}
         private-key: ${{ secrets.GH_APP_KEY }}
-        python-version: ${{ env.PY_VERSION }}
+        install: false
 
     - name: Build and Push Docker Image
       id: build_image
