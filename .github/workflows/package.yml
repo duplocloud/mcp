@@ -27,7 +27,7 @@ jobs:
 
     - name: Setup
       id: setup
-      uses: .github/actions/setup@main
+      uses: duplocloud/mcp/.github/actions/setup@main
       with:
         ref: ${{ inputs.tag }}
         fetch-depth: 0
