@@ -65,7 +65,7 @@ jobs:
         token: ${{ steps.app-token.outputs.token }}
 
   image:
-    name: Publish Image
+    name: Publish
     needs: version
     uses: ./.github/workflows/image.yml
     with:
@@ -76,7 +76,7 @@ jobs:
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD || '' }}
 
   package:
-    name: Publish Package
+    name: Publish
     needs: version
     uses: ./.github/workflows/package.yml
     secrets: inherit
