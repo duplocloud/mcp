@@ -15,7 +15,7 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
 from duplocloud.mcp.tools import ToolRegistrar
-from duplocloud.mcp.compact_tools import execute, explain, resources
+from duplocloud.mcp.compact_tools import execute, explain_resource, explain_command, resources
 from duplocloud.mcp.ctx import Ctx
 
 
@@ -39,6 +39,14 @@ class FakeArg:
             self.attributes["dest"] = dest
         if help_text:
             self.attributes["help"] = help_text
+
+    @property
+    def type_name(self):
+        return self.__supertype__.__name__
+
+    @property
+    def default(self):
+        return None
 
 
 # Tenant command schema as returned by commands_for("tenant")
@@ -223,58 +231,45 @@ class TestCompactExecute:
         return Ctx(
             duplo=duplo,
             config={},
-            tools=["execute", "explain", "resources"],
+            tools=["execute", "explain_resource", "explain_command", "resources"],
             resources=resource_list if resource_list is not None else ["tenant", "service"],
         )
 
     def test_execute_dispatches_with_body(self):
-        """Execute calls resource.command(cmd)(body=body) for body commands."""
+        """Execute passes body as a kwarg through duplo()."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
-        duplo.filter.side_effect = lambda x: x
-        duplo.format.return_value = '{"ok": true}'
-
-        cmd_fn = MagicMock(return_value={"ok": True})
-        resource_obj = MagicMock()
-        resource_obj.command.return_value = cmd_fn
-        duplo.load.return_value = resource_obj
+        duplo.__call__ = MagicMock(return_value={"ok": True})
 
         ctx = self._make_ctx(duplo)
-        result = execute(ctx, resource="tenant", command="create", body={"AccountName": "test"})
+        execute(ctx, resource="tenant", command="create", body={"AccountName": "test"})
 
-        resource_obj.command.assert_called_with("create")
-        cmd_fn.assert_called_with(body={"AccountName": "test"})
+        duplo.assert_called_with("tenant", "create", query=None, body={"AccountName": "test"})
 
     def test_execute_dispatches_with_name(self):
-        """Execute inserts name into call_args: duplo(resource, command, name)."""
+        """Execute passes name as a kwarg through duplo()."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
         duplo.__call__ = MagicMock(return_value="found-it")
 
         ctx = self._make_ctx(duplo)
-        result = execute(ctx, resource="tenant", command="find", name="my-tenant")
+        execute(ctx, resource="tenant", command="find", name="my-tenant")
 
-        duplo.assert_called_with("tenant", "find", "my-tenant")
+        duplo.assert_called_with("tenant", "find", query=None, name="my-tenant")
 
-    def test_execute_dispatches_positional_args(self):
-        """Execute calls duplo(resource, command, *args) for non-body commands."""
+    def test_execute_dispatches_with_args_dict(self):
+        """Execute passes args dict entries as kwargs through duplo()."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
-        duplo.__call__ = MagicMock(return_value="found-it")
+        duplo.__call__ = MagicMock(return_value="ok")
 
         ctx = self._make_ctx(duplo)
-        result = execute(ctx, resource="tenant", command="find", args=["my-tenant"])
+        execute(ctx, resource="service", command="update_image",
+                args={"name": "my-svc", "image": "nginx:latest"})
 
-        duplo.assert_called_with("tenant", "find", "my-tenant")
+        duplo.assert_called_with("service", "update_image", query=None,
+                                 name="my-svc", image="nginx:latest")
 
     def test_execute_respects_resource_filter(self):
         """Execute rejects resources not in ctx.resources."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
 
         ctx = self._make_ctx(duplo, resource_list=["tenant"])
         result = execute(ctx, resource="service", command="list")
@@ -284,14 +279,12 @@ class TestCompactExecute:
     def test_execute_respects_command_filter(self):
         """Execute rejects commands that don't match the command filter."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
         duplo.wait = False
 
         ctx = Ctx(
             duplo=duplo,
             config={"command_filter": "list|find"},
-            tools=["execute", "explain", "resources"],
+            tools=["execute", "explain_resource", "explain_command", "resources"],
             resources=["tenant"],
         )
         result = execute(ctx, resource="tenant", command="delete")
@@ -299,44 +292,21 @@ class TestCompactExecute:
         assert "not allowed" in result
         assert "command filter" in result
 
-    def test_execute_restores_globals(self):
-        """Execute restores query, output, and wait after call, even on error."""
+    def test_execute_passes_query_to_duplo(self):
+        """Execute passes query through to duplo() as a keyword arg."""
         duplo = MagicMock()
-        duplo.query = "original_query"
-        duplo.output = "yaml"
-        duplo.wait = False
-        duplo.side_effect = Exception("boom")
-
-        ctx = self._make_ctx(duplo)
-        result = execute(ctx, resource="tenant", command="list", query="[].Name", output="json", wait=True)
-
-        assert isinstance(result, str)
-        assert "Error" in result
-        assert duplo.query == "original_query"
-        assert duplo.output == "yaml"
-        assert duplo.wait is False
-
-    def test_execute_sets_temporary_query(self):
-        """Execute temporarily sets duplo.query when query param provided."""
-        duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
         duplo.__call__ = MagicMock(return_value="[]")
 
         ctx = self._make_ctx(duplo)
         execute(ctx, resource="tenant", command="list", query="[].Name")
 
-        # During the call, query should have been set, then restored
-        assert duplo.query is None
+        duplo.assert_called_with("tenant", "list", query="[].Name")
 
-    def test_execute_sets_temporary_wait(self):
-        """Execute temporarily sets duplo.wait when wait=True."""
+    def test_execute_sets_wait_toggle(self):
+        """Execute sets duplo.wait to the provided value."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
         duplo.wait = False
 
-        # Capture wait value during the call via side_effect
         captured = {}
         def capture_call(*a, **kw):
             captured["wait"] = duplo.wait
@@ -347,37 +317,47 @@ class TestCompactExecute:
         execute(ctx, resource="tenant", command="list", wait=True)
 
         assert captured["wait"] is True
-        assert duplo.wait is False  # restored after call
 
     def test_execute_name_and_args_combined(self):
-        """Execute with both name and args builds correct call_args."""
+        """Execute with both name and args dict merges all into kwargs."""
         duplo = MagicMock()
-        duplo.query = None
-        duplo.output = "json"
         duplo.__call__ = MagicMock(return_value="ok")
 
         ctx = self._make_ctx(duplo)
-        execute(ctx, resource="service", command="update_image", name="my-svc", args=["nginx:latest"])
+        execute(ctx, resource="service", command="update_image",
+                name="my-svc", args={"image": "nginx:latest"})
 
-        duplo.assert_called_with("service", "update_image", "my-svc", "nginx:latest")
+        duplo.assert_called_with("service", "update_image", query=None,
+                                 image="nginx:latest", name="my-svc")
 
-
-class TestCompactExplain:
-    """Tests for the compact mode explain tool."""
-
-    def test_explain_lists_all_commands(self):
-        """Explain without command returns all commands with summaries."""
+    def test_execute_returns_error_on_exception(self):
+        """Execute catches exceptions and returns an error string."""
         duplo = MagicMock()
-        
-        # Mock resource object with methods that have docstrings
+        duplo.side_effect = Exception("boom")
+
+        ctx = self._make_ctx(duplo)
+        result = execute(ctx, resource="tenant", command="list")
+
+        assert isinstance(result, str)
+        assert "Error" in result
+        assert "boom" in result
+
+
+class TestCompactExplainResource:
+    """Tests for the compact mode explain_resource tool."""
+
+    def test_explain_resource_lists_all_commands(self):
+        """explain_resource returns all commands with summaries."""
+        duplo = MagicMock()
+
         resource_obj = MagicMock()
         resource_obj.create = MagicMock(__doc__="Create a new tenant")
         resource_obj.list = MagicMock(__doc__="List all tenants")
         duplo.load.return_value = resource_obj
 
-        ctx = Ctx(duplo=duplo, config={}, tools=[])
+        ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["tenant"])
         with patch("duplocloud.mcp.compact_tools.commands_for", return_value=TENANT_COMMANDS):
-            result = explain(ctx, resource="tenant")
+            result = explain_resource(ctx, resource="tenant")
 
         assert result["resource"] == "tenant"
         assert "create" in result["commands"]
@@ -386,8 +366,21 @@ class TestCompactExplain:
         assert "list" in result["commands"]
         assert result["commands"]["list"]["summary"] == "List all tenants"
 
-    def test_explain_single_command_with_model(self, tenant_args):
-        """Explain with command returns detailed args and model fields."""
+    def test_explain_resource_rejects_unknown(self):
+        """explain_resource returns error for resource not in ctx."""
+        duplo = MagicMock()
+
+        ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["tenant"])
+        result = explain_resource(ctx, resource="nonexistent")
+
+        assert "error" in result
+
+
+class TestCompactExplainCommand:
+    """Tests for the compact mode explain_command tool."""
+
+    def test_explain_command_with_model(self, tenant_args):
+        """explain_command returns detailed args and model fields."""
         duplo = MagicMock()
         duplo.load_model.return_value = FakeModel
 
@@ -395,26 +388,35 @@ class TestCompactExplain:
         resource_obj.create = MagicMock(__doc__="Create a tenant")
         duplo.load.return_value = resource_obj
 
-        ctx = Ctx(duplo=duplo, config={}, tools=[])
+        ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["tenant"])
         with patch("duplocloud.mcp.compact_tools.commands_for", return_value=TENANT_COMMANDS), \
              patch("duplocloud.mcp.compact_tools.extract_args", return_value=tenant_args["create"]):
-            result = explain(ctx, resource="tenant", command="create")
+            result = explain_command(ctx, resource="tenant", command="create")
 
         assert result["resource"] == "tenant"
         assert result["command"] == "create"
         assert result["model"] == "AddTenantRequest"
-        assert "model_fields" in result
+        assert "body_schema" in result
 
-    def test_explain_unknown_command(self):
-        """Explain with unknown command returns error with available commands."""
+    def test_explain_command_unknown(self):
+        """explain_command returns error with available commands for unknown command."""
         duplo = MagicMock()
 
-        ctx = Ctx(duplo=duplo, config={}, tools=[])
+        ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["tenant"])
         with patch("duplocloud.mcp.compact_tools.commands_for", return_value=TENANT_COMMANDS):
-            result = explain(ctx, resource="tenant", command="nonexistent")
+            result = explain_command(ctx, resource="tenant", command="nonexistent")
 
         assert "error" in result
         assert "available" in result
+
+    def test_explain_command_rejects_unknown_resource(self):
+        """explain_command returns error for resource not in ctx."""
+        duplo = MagicMock()
+
+        ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["tenant"])
+        result = explain_command(ctx, resource="nonexistent", command="list")
+
+        assert "error" in result
 
 
 class TestCompactResources:
@@ -427,7 +429,7 @@ class TestCompactResources:
         ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["lambda", "service", "tenant"])
         result = resources(ctx)
 
-        assert result["resources"] == ["lambda", "service", "tenant"]
+        assert result == ["lambda", "service", "tenant"]
 
     def test_resources_respects_filter(self):
         """Resources in ctx only contain what passed the filter at registration."""
@@ -436,6 +438,73 @@ class TestCompactResources:
         ctx = Ctx(duplo=duplo, config={}, tools=[], resources=["service", "tenant"])
         result = resources(ctx)
 
-        assert "lambda" not in result["resources"]
-        assert "tenant" in result["resources"]
-        assert "service" in result["resources"]
+        assert "lambda" not in result
+        assert "tenant" in result
+        assert "service" in result
+
+
+# ---------------------------------------------------------------------------
+# Self-exclusion – MCP must never be operable as a tool
+# ---------------------------------------------------------------------------
+
+class TestMcpSelfExclusion:
+    """The MCP server must never be accessible as a tool in any mode.
+
+    In expanded mode, register_tools() strips 'mcp' before reaching
+    ToolRegistrar (tested in test_server.py).  In compact mode, the
+    ctx.resources list never contains 'mcp', so explain_resource,
+    explain_command, and execute must reject it at the resource-validation
+    gate.
+    """
+
+    @staticmethod
+    def _ctx_without_mcp(duplo):
+        """Build a Ctx the way the real server does — 'mcp' is never in resources."""
+        return Ctx(
+            duplo=duplo,
+            config={"command_filter": ".*"},
+            tools=["execute", "explain_resource", "explain_command", "resources"],
+            resources=["tenant", "service"],
+        )
+
+    def test_execute_rejects_mcp(self):
+        """execute('mcp', 'start') is blocked because 'mcp' is not in resources."""
+        duplo = MagicMock()
+
+        ctx = self._ctx_without_mcp(duplo)
+        result = execute(ctx, resource="mcp", command="start")
+
+        assert "error" in result.lower()
+        assert "mcp" in result
+        duplo.load.assert_not_called()
+
+    def test_explain_resource_rejects_mcp(self):
+        """explain_resource('mcp') is blocked because 'mcp' is not in resources."""
+        duplo = MagicMock()
+
+        ctx = self._ctx_without_mcp(duplo)
+        result = explain_resource(ctx, resource="mcp")
+
+        assert "error" in result
+        assert "mcp" in result["error"]
+        duplo.load.assert_not_called()
+
+    def test_explain_command_rejects_mcp(self):
+        """explain_command('mcp', 'start') is blocked because 'mcp' is not in resources."""
+        duplo = MagicMock()
+
+        ctx = self._ctx_without_mcp(duplo)
+        result = explain_command(ctx, resource="mcp", command="start")
+
+        assert "error" in result
+        assert "mcp" in result["error"]
+        duplo.load.assert_not_called()
+
+    def test_resources_never_lists_mcp(self):
+        """The resources tool never includes 'mcp' in its output."""
+        duplo = MagicMock()
+
+        ctx = self._ctx_without_mcp(duplo)
+        result = resources(ctx)
+
+        assert "mcp" not in result

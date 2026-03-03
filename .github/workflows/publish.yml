@@ -112,7 +112,7 @@ jobs:
         echo "badge=${BADGE}" >> "$GITHUB_OUTPUT"
 
     - name: Download Package Artifact
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v8
       with:
         name: ${{ needs.package.outputs.package }}
         path: dist

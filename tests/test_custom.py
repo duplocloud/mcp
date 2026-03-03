@@ -23,6 +23,13 @@ from duplocloud.mcp.ctx import (
 from duplocloud.mcp.server import DuploCloudMCP
 
 
+def _make_server(mcp, mock_duplo):
+    """Create a DuploCloudMCP with a test FastMCP instance injected."""
+    server = DuploCloudMCP(mock_duplo)
+    server.mcp = mcp
+    return server
+
+
 @pytest.fixture(autouse=True)
 def clean_registries():
     """Ensure registries are empty before and after each test."""
@@ -128,7 +135,7 @@ class TestRegisterCustom:
             return {"ok": True}
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
 
         server.register_custom()
 
@@ -147,7 +154,7 @@ class TestRegisterCustom:
             return "spied"
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom()
 
         # Call the tool through FastMCP
@@ -165,7 +172,7 @@ class TestRegisterCustom:
             return "always"
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
 
         # Register with mode="user" — admin_only should not match
         server.register_custom(mode="user")
@@ -182,7 +189,7 @@ class TestRegisterCustom:
             return f"hello {name}"
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom()
 
         result = asyncio.run(mcp.call_tool("greeter", {"name": "duplo"}))
@@ -205,7 +212,7 @@ class TestCustomRoutes:
             return JSONResponse({"pong": True})
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom()
 
         client = TestClient(mcp.http_app(), raise_server_exceptions=True)
@@ -224,7 +231,7 @@ class TestCustomRoutes:
             return JSONResponse({"tenant": ctx.duplo.tenant})
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom()
 
         client = TestClient(mcp.http_app(), raise_server_exceptions=True)
@@ -247,7 +254,7 @@ class TestCustomRoutes:
         })
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom()
 
         client = TestClient(mcp.http_app(), raise_server_exceptions=True)
@@ -266,7 +273,7 @@ class TestCustomRoutes:
             return JSONResponse({"secret": True})
 
         mcp = FastMCP(name="test", version="0.0.0")
-        server = DuploCloudMCP(mcp=mcp, duplo=mock_duplo)
+        server = _make_server(mcp, mock_duplo)
         server.register_custom(mode="user")  # "admin" route should be skipped
 
         client = TestClient(mcp.http_app(), raise_server_exceptions=False)
