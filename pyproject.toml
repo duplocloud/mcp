@@ -45,8 +45,8 @@ build-backend = "setuptools.build_meta"
 Homepage = "https://github.com/duplocloud/mcp"
 Issues = "https://github.com/duplocloud/mcp/issues"
 
-[project.scripts]
-duplocloud-mcp = "duplocloud.mcp.__main__:main"
+[project.entry-points."duplocloud.net"]
+mcp = "duplocloud.mcp.server:DuploCloudMCP"
 
 [tool.setuptools]
 packages = ["duplocloud.mcp"]

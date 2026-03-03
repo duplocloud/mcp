@@ -1,108 +1,165 @@
-"""DuploCloud MCP server lifecycle coordinator.
+"""DuploCloud MCP server — duploctl resource plugin.
+
+Registers ``mcp`` as a duploctl resource so the server can be launched via::
+
+    duploctl mcp --transport stdio --tool-mode compact
 
 DuploCloudMCP knows about transport, ports, and which resources to register.
 It does not know how tool wrapping, signature rewriting, or model resolution
 works -- that is delegated to ToolRegistrar.
 """
 
+import asyncio
 import inspect
 import re
 from typing import Any, Optional
 
+from duplocloud.argtype import Arg
 from duplocloud.client import DuploClient
-from duplocloud.commander import available_resources, load_format
-from fastmcp import FastMCP
+from duplocloud.commander import Command, Resource, available_resources, load_format
+from duplocloud.resource import DuploResource
 from fastmcp.utilities.logging import get_logger
 
+from . import compact_tools as _compact_tools  # noqa: F401
+from . import config_display as _config_display  # noqa: F401
 from .app import mcp as mcp_app
-from .args import build_parser
 from .ctx import Ctx, drain_routes, drain_tools
 from .tools import ToolRegistrar
 
-# Import modules that use @custom_tool / @custom_route so
-# the registry is populated before register_custom() drains it.
-from . import config_display as _  # noqa: F401
-from . import compact_tools as __  # noqa: F401
-
 logger = get_logger(__name__)
 
+# Resources that must never be registered as MCP tools.
+# "mcp" is excluded to prevent the server from registering itself.
+_EXCLUDED_RESOURCES = {"mcp"}
 
-class DuploCloudMCP:
+# ---------------------------------------------------------------------------
+# MCP-specific Arg types
+# ---------------------------------------------------------------------------
+
+TRANSPORT = Arg(
+    "transport", "-tp",
+    help="The transport protocol to use (stdio or http)",
+    default="stdio",
+    choices=["stdio", "http"],
+    env="DUPLO_MCP_TRANSPORT",
+)
+
+PORT = Arg(
+    "port", "-mp",
+    help="The port to listen on for HTTP transport",
+    type=int,
+    default=8000,
+    env="DUPLO_MCP_PORT",
+)
+
+RESOURCE_FILTER = Arg(
+    "resource_filter", "--resource-filter",
+    help="Regex pattern for resource names to include",
+    default=".*",
+    env="DUPLO_MCP_RESOURCE_FILTER",
+)
+
+COMMAND_FILTER = Arg(
+    "command_filter", "--command-filter",
+    help="Regex pattern for command names to include",
+    default=".*",
+    env="DUPLO_MCP_COMMAND_FILTER",
+)
+
+TOOL_MODE = Arg(
+    "tool_mode", "--tool-mode",
+    help="Tool registration mode: expanded or compact",
+    default="compact",
+    choices=["expanded", "compact"],
+    env="DUPLO_MCP_TOOL_MODE",
+)
+
+
+# ---------------------------------------------------------------------------
+# Resource plugin
+# ---------------------------------------------------------------------------
+
+@Resource("mcp")
+class DuploCloudMCP(DuploResource):
     """DuploCloud MCP server.
 
-    Thin coordinator that owns server lifecycle: argument parsing, resource
-    filtering, tool registration delegation, and transport startup.
+    Starts a Model Context Protocol server that discovers duploctl resources
+    and exposes them as MCP tools for AI agents and compatible clients.
     """
 
-    def __init__(
-        self,
-        mcp: FastMCP,
-        duplo: DuploClient,
-        transport: str = "http",
-        port: int = 8000,
-        resource_filter: str = ".*",
-        command_filter: str = ".*",
-        tool_mode: str = "expanded",
-    ):
-        """Initialize the server.
-
-        Args:
-            mcp: The FastMCP instance.
-            duplo: The DuploCloud client instance.
-            transport: Transport protocol ("stdio" or "http").
-            port: Port for HTTP transport.
-            resource_filter: Regex pattern for resource names to include.
-            command_filter: Regex pattern for command names to include.
-            tool_mode: Tool registration mode ("expanded" or "compact").
-        """
-        self.mcp = mcp
-        self.duplo = duplo
-        self.transport = transport
-        self.port = port
-        self.resource_filter = re.compile(resource_filter)
-        self.command_filter = re.compile(command_filter)
-        self.tool_mode = tool_mode
+    def __init__(self, duplo: DuploClient):
+        super().__init__(duplo)
+        self.duplo.output = None
+        self.mcp = mcp_app
         self._filtered_resources: list[str] = []
+        self.transport = "stdio"
+        self.port = 8000
+        self.resource_filter = re.compile(".*")
+        self.command_filter = re.compile(".*")
+        self.tool_mode = "compact"
 
-    @staticmethod
-    def from_args(args: Optional[list[str]] = None):
-        """Create a DuploCloudMCP instance from CLI arguments.
+    def __call__(self, *args):
+        """Parse CLI args and start the MCP server.
 
-        DuploClient handles its own arguments and returns the rest.
-        The remaining arguments are parsed for MCP server configuration.
-
-        Args:
-            args: CLI arguments (uses sys.argv if None).
-
-        Returns:
-            A configured DuploCloudMCP instance.
+        Overrides :meth:`DuploResource.__call__` so that no subcommand name
+        is required.  ``duploctl mcp --transport stdio`` routes directly to
+        :meth:`start` via its argparse wrapper.
         """
-        duplo, rest = DuploClient.from_env()
+        c = self.command("start")
+        return c(*args)
 
-        parser = build_parser()
-        parsed = parser.parse_args(rest if args is None else args)
+    @Command()
+    def start(
+        self,
+        transport: TRANSPORT,
+        port: PORT,
+        resource_filter: RESOURCE_FILTER,
+        command_filter: COMMAND_FILTER,
+        tool_mode: TOOL_MODE,
+    ):
+        """Start the MCP server.
 
-        return DuploCloudMCP(
-            mcp=mcp_app,
-            duplo=duplo,
-            transport=parsed.transport,
-            port=parsed.port,
-            resource_filter=parsed.resource_filter,
-            command_filter=parsed.command_filter,
-            tool_mode=parsed.tool_mode,
-        )
+        Starts the DuploCloud MCP server with the specified configuration.
+        The server discovers duploctl resources and exposes them as MCP tools.
+        """
+        if transport is not None:
+            self.transport = transport
+        if port is not None:
+            self.port = port
+        if resource_filter is not None:
+            self.resource_filter = re.compile(resource_filter)
+        if command_filter is not None:
+            self.command_filter = re.compile(command_filter)
+        if tool_mode is not None:
+            self.tool_mode = tool_mode
+
+        self.duplo.validate = self.tool_mode == "compact"
+
+        self.register_tools()
+        self._start_transport()
+
+    # ------------------------------------------------------------------
+    # Tool registration
+    # ------------------------------------------------------------------
 
     def register_tools(self, resource_names: Optional[list[str]] = None):
         """Register DuploCloud tools with the MCP server.
 
         If resource_names is None, discovers all available resources.
-        Applies the resource filter before delegating to ToolRegistrar.
+        Always excludes internal resources (like ``mcp`` itself), then
+        applies the resource filter before delegating to ToolRegistrar.
 
         Args:
             resource_names: Explicit list of resources, or None for all.
         """
         if resource_names is None:
             resource_names = available_resources()
+
+        # Always strip internal resources first
+        resource_names = [
+            name for name in resource_names
+            if name not in _EXCLUDED_RESOURCES
+        ]
 
         # Apply resource filter
         filtered = [
@@ -164,6 +221,10 @@ class DuploCloudMCP:
             self.mcp.custom_route(path, methods=methods)(route_handler)
             logger.info(f"    route {path} (custom)")
 
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
     def _build_ctx(self) -> Ctx:
         """Build a Ctx snapshot from current server state."""
         return Ctx(
@@ -181,7 +242,6 @@ class DuploCloudMCP:
 
     def _list_tool_names(self) -> list[str]:
         """Collect names of all tools currently registered on the FastMCP instance."""
-        import asyncio
 
         async def _get():
             return [t.name for t in await self.mcp.list_tools()]
@@ -189,9 +249,7 @@ class DuploCloudMCP:
         # If there's already a running loop, schedule on it; otherwise run fresh
         try:
             asyncio.get_running_loop()
-            # We're inside an event loop already — create a task
             asyncio.ensure_future(_get())
-            # This path shouldn't happen during startup, but handle it
             return []
         except RuntimeError:
             return asyncio.run(_get())
@@ -211,7 +269,6 @@ class DuploCloudMCP:
             A wrapper with ctx-free signature.
         """
         sig = inspect.signature(fn)
-        # Remove 'ctx' from the visible signature
         new_params = [
             p for p in sig.parameters.values()
             if p.name != "ctx"
@@ -230,16 +287,12 @@ class DuploCloudMCP:
         }
         return wrapper
 
-    def start(self):
-        """Start the MCP server.
-
-        Logs environment info and active filters, then runs the transport.
-        """
+    def _start_transport(self):
+        """Log environment info and active filters, then run the transport."""
         yaml_formatter = load_format("yaml")
         formatted_info = yaml_formatter(self.duplo.config)
         logger.info(f"DuploCloud Environment Info:\n{formatted_info}")
 
-        # Log active filters if non-default
         logger.info(f"Tool mode: {self.tool_mode}")
         if self.resource_filter.pattern != ".*":
             logger.info(f"Resource filter: {self.resource_filter.pattern}")

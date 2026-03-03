@@ -32,5 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /
 RUN pip install --no-cache-dir ./dist/*.whl && \
   rm -rf ./dist
 
-# Set the command to run the server using the CLI command
-CMD ["duplocloud-mcp"]
+# The entrypoint is the duploctl mcp plugin
+ENTRYPOINT ["duploctl", "mcp"]
+
+# Default args for the server (can be overridden at runtime)
+CMD ["--transport", "http"]

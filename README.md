@@ -2,7 +2,7 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for DuploCloud. Dynamically discovers [`duploctl`](https://github.com/duplocloud/duploctl) commands and exposes them as MCP tools so AI agents and compatible clients can query infrastructure state and perform auditable actions.
 
-Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python package.
+Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python package. Installs as a `duploctl` plugin — no separate command needed.
 
 ## Table of Contents
 
@@ -23,6 +23,7 @@ Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python pac
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Custom Tools and Routes](#custom-tools-and-routes)
 - [Endpoints](#endpoints)
+- [Docker](#docker)
 - [Development](#development)
   - [Project Structure](#project-structure)
   - [Running Tests](#running-tests)
@@ -30,6 +31,7 @@ Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python pac
 
 ## Features
 
+- **duploctl plugin** -- registers as a `duploctl` resource via entry points; run with `duploctl mcp`
 - **Automatic tool discovery** -- all `duploctl` `@Command` methods are registered as MCP tools at startup
 - **Resource and command filtering** -- regex-based filters to control which tools are exposed
 - **Pydantic model integration** -- commands with models get typed input schemas instead of raw dicts
@@ -66,7 +68,7 @@ export DUPLO_HOST="https://your-portal.duplocloud.net"
 export DUPLO_TOKEN="your-token"
 export DUPLO_TENANT="your-tenant"
 
-duplocloud-mcp
+duploctl mcp
 ```
 
 The server starts on `http://localhost:8000` with all available tools registered.
@@ -97,19 +99,18 @@ Every setting can be provided as a CLI argument or an environment variable. CLI 
 | `DUPLO_MCP_RESOURCE_FILTER` | `.*` | Regex filter for resource names |
 | `DUPLO_MCP_COMMAND_FILTER` | `.*` | Regex filter for command names |
 | `DUPLO_MCP_TOOL_MODE` | `expanded` | Tool registration mode (`expanded` or `compact`) |
-| `PORT` | `8000` | Fallback port (if `DUPLO_MCP_PORT` is unset) |
 
 ### CLI Arguments
 
 ```
-duplocloud-mcp [--transport {stdio,http}]
-               [--port PORT]
-               [--resource-filter PATTERN]
-               [--command-filter PATTERN]
-               [--tool-mode {expanded,compact}]
+duploctl mcp [--transport {stdio,http}]
+             [--port PORT]
+             [--resource-filter PATTERN]
+             [--command-filter PATTERN]
+             [--tool-mode {expanded,compact}]
 ```
 
-All `duploctl` arguments (`-H`, `-t`, `-T`, etc.) are also accepted and passed through to the DuploCloud client.
+All `duploctl` global arguments (`-H`, `-t`, `-T`, etc.) are also accepted and passed through to the DuploCloud client.
 
 ## Tool Modes
 
@@ -120,7 +121,7 @@ The `--tool-mode` flag controls how duploctl commands are exposed as MCP tools.
 **Default.** Registers one tool per resource+command combination.
 
 ```bash
-duplocloud-mcp --tool-mode expanded
+duploctl mcp --tool-mode expanded
 ```
 
 Produces tools like `tenant_create`, `tenant_find`, `service_list`, etc. Each tool has its own input schema -- commands with Pydantic models (e.g. `tenant_create`) get full field-level schemas so the LLM sees every field name, type, and constraint.
@@ -133,7 +134,7 @@ Produces tools like `tenant_create`, `tenant_find`, `service_list`, etc. Each to
 Registers three tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
 
 ```bash
-duplocloud-mcp --tool-mode compact
+duploctl mcp --tool-mode compact
 ```
 
 | Tool | Purpose |
@@ -164,23 +165,23 @@ Expose only specific resource types:
 
 ```bash
 # Only tenant tools
-duplocloud-mcp --resource-filter "tenant"
+duploctl mcp --resource-filter "tenant"
 
 # Tenant and service tools
-duplocloud-mcp --resource-filter "tenant|service"
+duploctl mcp --resource-filter "tenant|service"
 
 # Everything related to batch
-duplocloud-mcp --resource-filter "batch_.*"
+duploctl mcp --resource-filter "batch_.*"
 
 # All resources (default)
-duplocloud-mcp --resource-filter ".*"
+duploctl mcp --resource-filter ".*"
 ```
 
 Via environment variable:
 
 ```bash
 export DUPLO_MCP_RESOURCE_FILTER="tenant|service|s3"
-duplocloud-mcp
+duploctl mcp
 ```
 
 ### Command Filter
@@ -189,10 +190,10 @@ Expose only specific operations across all resources:
 
 ```bash
 # Read-only -- only list and find commands
-duplocloud-mcp --command-filter "list|find"
+duploctl mcp --command-filter "list|find"
 
 # Only create and delete
-duplocloud-mcp --command-filter "create|delete"
+duploctl mcp --command-filter "create|delete"
 ```
 
 ### Combining Filters
@@ -200,7 +201,7 @@ duplocloud-mcp --command-filter "create|delete"
 Filters compose as an intersection. This exposes only list and find for tenant and service:
 
 ```bash
-duplocloud-mcp \
+duploctl mcp \
   --resource-filter "tenant|service" \
   --command-filter "list|find"
 ```
@@ -229,15 +230,15 @@ Add to your `.mcp.json` (project root) or `.vscode/mcp.json`:
 For clients that expect stdio transport (the server communicates over stdin/stdout):
 
 ```bash
-duplocloud-mcp --transport stdio
+duploctl mcp --transport stdio
 ```
 
 ```json
 {
   "mcpServers": {
     "duploctl": {
-      "command": "duplocloud-mcp",
-      "args": ["--transport", "stdio"],
+      "command": "duploctl",
+      "args": ["mcp", "--transport", "stdio"],
       "env": {
         "DUPLO_HOST": "https://your-portal.duplocloud.net",
         "DUPLO_TOKEN": "your-token",
@@ -254,8 +255,8 @@ duplocloud-mcp --transport stdio
 {
   "mcpServers": {
     "duploctl": {
-      "command": "duplocloud-mcp",
-      "args": ["--transport", "stdio", "--resource-filter", "tenant|service"],
+      "command": "duploctl",
+      "args": ["mcp", "--transport", "stdio", "--resource-filter", "tenant|service"],
       "env": {
         "DUPLO_HOST": "https://your-portal.duplocloud.net",
         "DUPLO_TOKEN": "your-token",
@@ -315,18 +316,34 @@ def debug_info(ctx: Ctx) -> dict:
 | `/health` | GET | Health check for load balancers |
 | `/config` | GET | Live server configuration and registered tools |
 
+## Docker
+
+The Docker image uses `duploctl mcp` as its entrypoint. Pass arguments via `CMD` or at runtime:
+
+```bash
+# Default (http transport)
+docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp
+
+# Override transport
+docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp --transport stdio
+
+# Compact mode with filters
+docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp \
+  --tool-mode compact --resource-filter "tenant|service"
+```
+
 ## Development
 
 ### Project Structure
 
 ```
 duplocloud/mcp/
-  __main__.py        # CLI entrypoint
+  __main__.py        # Legacy entrypoint (use duploctl mcp instead)
   app.py             # FastMCP instance and health route
-  args.py            # Declarative CLI argument definitions
+  args.py            # Declarative CLI argument definitions (legacy)
   ctx.py             # Ctx dataclass, @custom_tool, @custom_route
   config_display.py  # Built-in config tool and route
-  server.py          # DuploCloudMCP lifecycle coordinator
+  server.py          # DuploCloudMCP resource plugin and lifecycle coordinator
   tools.py           # ToolRegistrar (duploctl -> MCP tool conversion)
   compact_tools.py   # Compact mode tools (execute, explain, resources)
   utils.py           # Docstring template resolution
@@ -336,7 +353,7 @@ tests/
   test_ctx.py        # Ctx, decorators, drain functions
   test_custom.py     # Context injection, register_custom, build_config
   test_filters.py    # Regex filter matching behavior
-  test_server.py     # DuploCloudMCP init, from_args, filter application
+  test_server.py     # DuploCloudMCP init, filter application, self-exclusion
   test_modes.py      # Expanded and compact mode tests
   test_tools.py      # ToolRegistrar param building and wrapper construction
 ```

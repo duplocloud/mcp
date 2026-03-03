@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added 
+
 - Updated GitHub workflow action versions to current stable tags (artifact actions, Docker Hub description, and auto-assign).
+- fully refined and refactored and polished the compact mode flow
+- added the validation to the compact mdoe as well
+- allow filtering per execution
 
 ## [0.0.2] - 2026-02-26
 

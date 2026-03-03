@@ -12,145 +12,89 @@ LLM workflow: resources → explain → execute.
 """
 
 import re
-import typing
-from typing import get_args, get_origin
-
-from pydantic import BaseModel
 from duplocloud.commander import commands_for, extract_args
-
 from .ctx import Ctx, custom_tool
 
 
-def _friendly_type(annotation) -> str:
-    """Simplify a typing annotation into a readable string.
-    
-    Examples:
-        typing.Optional[typing.Annotated[str, Strict(strict=True)]] -> "str (optional)"
-        typing.Optional[V1ObjectMeta] -> "V1ObjectMeta (optional)"
-        typing.Dict[str, str] -> "dict[str, str]"
-    """
-    if annotation is None:
-        return "any"
-    
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    
-    # Optional[X] is Union[X, None]
-    if origin is typing.Union:
-        non_none = [a for a in args if a is not type(None)]
-        if len(non_none) == 1:
-            return f"{_friendly_type(non_none[0])} (optional)"
-        return " | ".join(_friendly_type(a) for a in non_none)
-    
-    # Annotated[X, ...] — unwrap to just X
-    if origin is typing.Annotated or str(origin) == "typing.Annotated":
-        return _friendly_type(args[0]) if args else str(annotation)
-    
-    # Generic types like Dict, List
-    if origin is dict:
-        if args:
-            return f"dict[{_friendly_type(args[0])}, {_friendly_type(args[1])}]"
-        return "dict"
-    if origin is list:
-        if args:
-            return f"list[{_friendly_type(args[0])}]"
-        return "list"
-    
-    # Plain types
-    if hasattr(annotation, "__name__"):
-        return annotation.__name__
-    
-    return str(annotation)
-
-
-def _describe_model_fields(model_cls, duplo) -> dict:
-    """Extract field descriptions from a Pydantic model, recursing into nested models."""
-    if not hasattr(model_cls, "model_fields"):
-        return {}
-    fields = {}
-    for field_name, field_info in model_cls.model_fields.items():
-        field_entry = {}
-        if field_info.annotation is not None:
-            field_entry["type"] = _friendly_type(field_info.annotation)
-        if field_info.is_required():
-            field_entry["required"] = True
-        if field_info.description:
-            field_entry["description"] = field_info.description
-        if field_info.alias:
-            field_entry["alias"] = field_info.alias
-        
-        # Recurse into nested Pydantic models
-        inner = field_info.annotation
-        # Unwrap Optional/Annotated to find the core type
-        while get_origin(inner) in (typing.Union, typing.Annotated) or str(get_origin(inner)) == "typing.Annotated":
-            inner_args = get_args(inner)
-            non_none = [a for a in inner_args if a is not type(None)]
-            inner = non_none[0] if non_none else inner
-            if get_origin(inner) is not typing.Union:
-                # For Annotated, take first arg
-                if get_origin(inner) is typing.Annotated or str(get_origin(inner)) == "typing.Annotated":
-                    inner = get_args(inner)[0] if get_args(inner) else inner
-                else:
-                    break
-        
-        if isinstance(inner, type) and issubclass(inner, BaseModel) and hasattr(inner, "model_fields"):
-            field_entry["fields"] = _describe_model_fields(inner, duplo)
-        
-        fields[field_name] = field_entry
-    return fields
+# Args that are first-class params in execute() and should be skipped
+EXECUTE_FIRST_CLASS_ARGS = frozenset({"name", "body"})
 
 
 @custom_tool(name="resources", mode="compact")
-def resources(ctx: Ctx) -> dict:
+def resources(ctx: Ctx) -> list[str]:
     """List available DuploCloud resources.
 
     Returns the names of all resources that match the server's resource filter.
-    Use these names with the explain and execute tools.
+    Use these names with the explain_resource and execute tools.
     """
-    return {"resources": ctx.resources}
+    return ctx.resources
 
 
-@custom_tool(name="explain", mode="compact")
-def explain(ctx: Ctx, resource: str, command: str = None) -> dict:
-    """Explain a DuploCloud resource's commands, arguments, and body schema.
+@custom_tool(name="explain_resource", mode="compact")
+def explain_resource(ctx: Ctx, resource: str) -> dict:
+    """List all commands available on a DuploCloud resource.
 
-    Without a command, returns all commands available on the resource.
-    With a command, returns detailed argument info including body model
-    fields when a Pydantic model is defined. Use this to understand what
-    arguments the execute tool expects for a given resource and command.
+    Returns each command name with a summary and aliases.
+    Use the command names with explain_command for detailed argument info,
+    or directly with execute.
+
+    Use the resources tool to see all available resources.
 
     Args:
         resource: The resource name (e.g. "tenant", "service").
-        command: Optional specific command to get detailed argument info for.
     """
     duplo = ctx.duplo
-    
-    # Load resource first to ensure it's imported and registered
+
+    if resource not in ctx.resources:
+        return {"error": f"Resource '{resource}' is not available."}
+
     try:
         resource_obj = duplo.load(resource)
     except Exception as e:
         return {"error": f"Resource '{resource}' not found: {e}"}
-    
+
     try:
         cmds = commands_for(resource)
     except Exception as e:
         return {"error": f"Commands not found for resource '{resource}': {e}"}
 
-    if command is None:
-        # Resource-level explanation: list commands with summary lines
-        result = {"resource": resource, "commands": {}}
-        for cmd_name, cmd_info in cmds.items():
-            method = getattr(resource_obj, cmd_name, None)
-            # Extract first line of docstring as summary
-            summary = ""
-            if method and method.__doc__:
-                summary = method.__doc__.strip().split('\n')[0]
-            
-            result["commands"][cmd_name] = {
-                "summary": summary,
-                "aliases": cmd_info.get("aliases", []),
-            }
-        return result
+    result = {"resource": resource, "commands": {}}
+    for cmd_name, cmd_info in cmds.items():
+        method = getattr(resource_obj, cmd_name, None)
+        summary = ""
+        if method and method.__doc__:
+            summary = method.__doc__.strip().split('\n')[0]
+
+        result["commands"][cmd_name] = {
+            "summary": summary,
+            "aliases": cmd_info.get("aliases", []),
+        }
+    return result
+
+
+@custom_tool(name="explain_command", mode="compact")
+def explain_command(ctx: Ctx, resource: str, command: str) -> dict:
+    """Explain a specific command's arguments and body schema.
+
+    Returns detailed argument info and a JSON schema for the body when a
+    Pydantic model is defined. Use this to understand what arguments the
+    execute tool expects.
+
+    Use the explain_resource tool to see available commands for a resource. 
+
+    Args:
+        resource: The resource name (e.g. "tenant", "service").
+        command: The command name (e.g. "create", "find", "update_image").
+    """
+    duplo = ctx.duplo
+
+    if resource not in ctx.resources:
+        return {"error": f"Resource '{resource}' is not available."}
+
+    try:
+        cmds = commands_for(resource)
+    except Exception as e:
+        return {"error": f"Commands not found for resource '{resource}': {e}"}
 
     if command not in cmds:
         return {
@@ -164,51 +108,40 @@ def explain(ctx: Ctx, resource: str, command: str = None) -> dict:
     if not method:
         return {"error": f"Method '{command}' not callable on resource '{resource}'."}
 
-    cliargs = extract_args(method)
-    args_info = []
-    model_name = cmd_info.get("model")
-    
-    for arg in cliargs:
+    # Build args schema, skipping first-class execute params (name, body)
+    # Arg class provides: type_name, positional, default, attributes
+    TYPE_MAP = {"str": "string", "int": "integer", "float": "number", "bool": "boolean"}
+    args_properties = {}
+    for arg in extract_args(method):
         param_name = arg.attributes.get("dest", arg.__name__)
-        
-        # Special case for body parameter when a model is defined
-        if param_name == "body" and model_name:
-            info = {
-                "name": param_name,
-                "type": model_name,
-                "help": "See model fields below for schema details",
-            }
-        else:
-            # Get type name safely - some types like FileType don't have __name__
-            supertype = getattr(arg, "__supertype__", str)
-            try:
-                type_name = supertype.__name__
-            except AttributeError:
-                type_name = str(supertype)
-            
-            info = {
-                "name": param_name,
-                "type": type_name,
-                "help": arg.attributes.get("help", ""),
-            }
-        
-        if "default" in arg.attributes:
-            info["default"] = str(arg.attributes["default"])
-        args_info.append(info)
+        if param_name in EXECUTE_FIRST_CLASS_ARGS:
+            continue
+        prop = {"type": TYPE_MAP.get(arg.type_name, "string")}
+        if arg.attributes.get("help"):
+            prop["description"] = arg.attributes["help"]
+        if arg.default is not None:
+            prop["default"] = arg.default
+        args_properties[param_name] = prop
 
     result = {
         "resource": resource,
         "command": command,
         "aliases": cmd_info.get("aliases", []),
-        "args": args_info,
+        "args_schema": {
+            "type": "object",
+            "description": "Key-value pairs for the 'args' parameter in execute.",
+            "properties": args_properties,
+        },
         "docstring": method.__doc__ or "",
     }
 
+    # Add model JSON schema when present
+    model_name = cmd_info.get("model")
     if model_name:
         result["model"] = model_name
         model_cls = duplo.load_model(model_name)
-        if model_cls:
-            result["model_fields"] = _describe_model_fields(model_cls, duplo)
+        if model_cls and hasattr(model_cls, "model_json_schema"):
+            result["body_schema"] = model_cls.model_json_schema(by_alias=True)
 
     return result
 
@@ -218,32 +151,31 @@ def execute(
     ctx: Ctx,
     resource: str,
     command: str,
-    name: str = None,
-    args: list[str] = None,
+    name: str | None = None,
+    args: dict = None,
     body: dict = None,
     query: str = None,
-    output: str = None,
     wait: bool = False,
-) -> str:
-    """Execute a DuploCloud command. Use the explain tool first to understand
-    what arguments a command expects.
+):
+    """Execute a DuploCloud command. Use the explain_command tool first to
+    understand what arguments a command expects.
 
-    Dispatches through the DuploClient just like the CLI and the duploctl
-    bitbucket pipe. Commands that accept a body will automatically validate
+    Dispatches through the DuploClient just like the CLI . 
+    Commands that accept a body will automatically validate
     against the resource's model schema when available.
 
     Args:
         resource: The resource kind (e.g. "tenant", "service", "asg").
         command: The command to run (e.g. "create", "find", "list", "update").
-        name: The resource name. Optional even when the command requires it
-            because some commands can infer the name from the body object.
-            For example, find requires a name, but create may not.
-        args: Additional positional arguments as a list of strings. Most
-            commands do not need this. Use explain to check.
+        name: The resource name for commands that target a specific resource
+            (e.g. find, delete, update). Most commands accept this.
+        args: A map of additional command arguments as key-value pairs.
+            The keys correspond to the argument names returned by the
+            explain_command tool. For example: {"image": "nginx:latest"}.
         body: A dict payload for create/update commands. The schema depends
-            on the resource — use explain to see the expected model fields.
+            on the resource — use explain_command to see the expected model
+            fields.
         query: A jmespath expression to filter the command output.
-        output: Output format override — "json", "yaml", or "string".
         wait: Wait for the operation to complete before returning. Useful
             for create/update/delete commands that are asynchronous.
     """
@@ -255,42 +187,15 @@ def execute(
     if not command_filter.fullmatch(command):
         return f"Error: Command '{command}' is not allowed by the command filter."
 
-    # Save and temporarily override global options
-    orig_query = duplo.query
-    orig_output = duplo.output
-    orig_wait = duplo.wait
+    duplo.wait = wait
+
+    kwargs = dict(args) if args else {}
+    if name is not None:
+        kwargs["name"] = name
+    if body is not None:
+        kwargs["body"] = body
+
     try:
-        if query is not None:
-            duplo.query = query
-        if output is not None:
-            duplo.output = output
-        if wait:
-            duplo.wait = True
-
-        if body is not None:
-            # For commands with body, dispatch through resource.command()
-            # which handles arg parsing and model validation.
-            resource_obj = duplo.load(resource)
-            cmd_fn = resource_obj.command(command)
-            result = cmd_fn(body=body)
-            if result is not None:
-                result = duplo.filter(result)
-                return duplo.format(result)
-            return ""
-
-        # Build the positional args list like the pipe does:
-        # duplo(resource, command, name, *args)
-        call_args = [command]
-        if name is not None:
-            call_args.append(name)
-        if args:
-            call_args.extend(args)
-
-        result = duplo(resource, *call_args)
-        return result if result is not None else ""
+        return duplo(resource, command, query=query, **kwargs)
     except Exception as e:
         return f"Error: {e}"
-    finally:
-        duplo.query = orig_query
-        duplo.output = orig_output
-        duplo.wait = orig_wait
