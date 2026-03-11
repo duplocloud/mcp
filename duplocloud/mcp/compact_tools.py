@@ -91,6 +91,13 @@ def explain_command(ctx: Ctx, resource: str, command: str) -> dict:
     if resource not in ctx.resources:
         return {"error": f"Resource '{resource}' is not available."}
 
+    # Load the resource first so the @Resource decorator fires and
+    # populates the commander's `resources` registry before commands_for().
+    try:
+        resource_obj = duplo.load(resource)
+    except Exception as e:
+        return {"error": f"Resource '{resource}' not found: {e}"}
+
     try:
         cmds = commands_for(resource)
     except Exception as e:
@@ -103,7 +110,6 @@ def explain_command(ctx: Ctx, resource: str, command: str) -> dict:
         }
 
     cmd_info = cmds[command]
-    resource_obj = duplo.load(resource)
     method = getattr(resource_obj, command, None)
     if not method:
         return {"error": f"Method '{command}' not callable on resource '{resource}'."}

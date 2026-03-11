@@ -82,6 +82,7 @@ jobs:
     secrets: inherit
     with:
       tag: ${{ inputs.push && needs.version.outputs.tag || '' }}
+      push: ${{ inputs.push }}
 
   release:
     name: Release

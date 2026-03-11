@@ -15,7 +15,7 @@ import re
 from typing import Any, Optional
 
 from duplocloud.argtype import Arg
-from duplocloud.client import DuploClient
+from duplocloud.controller import DuploCtl
 from duplocloud.commander import Command, Resource, available_resources, load_format
 from duplocloud.resource import DuploResource
 from fastmcp.utilities.logging import get_logger
@@ -87,7 +87,7 @@ class DuploCloudMCP(DuploResource):
     and exposes them as MCP tools for AI agents and compatible clients.
     """
 
-    def __init__(self, duplo: DuploClient):
+    def __init__(self, duplo: DuploCtl):
         super().__init__(duplo)
         self.duplo.output = None
         self.mcp = mcp_app

@@ -8,7 +8,7 @@ wrapper construction, and FastMCP registration.
 import inspect
 import re
 
-from duplocloud.client import DuploClient
+from duplocloud.controller import DuploCtl
 from duplocloud.commander import commands_for, extract_args
 from fastmcp import FastMCP
 from fastmcp.utilities.logging import get_logger
@@ -29,7 +29,7 @@ class ToolRegistrar:
     independently testable.
     """
 
-    def __init__(self, mcp: FastMCP, duplo: DuploClient, command_filter: re.Pattern):
+    def __init__(self, mcp: FastMCP, duplo: DuploCtl, command_filter: re.Pattern):
         """Initialize the registrar.
 
         Args:

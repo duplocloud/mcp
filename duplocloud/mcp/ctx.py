@@ -15,7 +15,7 @@ applies to all modes.
 from dataclasses import dataclass, field
 from typing import Optional
 
-from duplocloud.client import DuploClient
+from duplocloud.controller import DuploCtl
 
 # ---------------------------------------------------------------------------
 # Context
@@ -31,7 +31,7 @@ class Ctx:
         tools: List of registered tool names (populated after registration).
         resources: Filtered resource names available to this server instance.
     """
-    duplo: DuploClient
+    duplo: DuploCtl
     config: dict = field(default_factory=dict)
     tools: list[str] = field(default_factory=list)
     resources: list[str] = field(default_factory=list)
