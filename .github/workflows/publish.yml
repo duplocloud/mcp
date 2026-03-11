@@ -79,10 +79,11 @@ jobs:
     name: Publish
     needs: version
     uses: ./.github/workflows/package.yml
-    secrets: inherit
     with:
       tag: ${{ inputs.push && needs.version.outputs.tag || '' }}
       push: ${{ inputs.push }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN || '' }}
 
   release:
     name: Release
