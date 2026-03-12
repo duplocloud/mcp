@@ -19,9 +19,6 @@ on:
         default: false
         type: boolean
 
-permissions:
-  id-token: write
-
 jobs:
 
   test:
@@ -84,7 +81,29 @@ jobs:
     uses: ./.github/workflows/package.yml
     with:
       tag: ${{ inputs.push && needs.version.outputs.tag || '' }}
-      push: ${{ inputs.push }}
+
+  pypi:
+    name: PyPI
+    needs:
+    - version
+    - package
+    if: inputs.push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/duplocloud-mcp
+    steps:
+
+    - name: Download Package Artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ needs.package.outputs.package }}
+        path: dist
+
+    - name: Publish Package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
 
   release:
     name: Release

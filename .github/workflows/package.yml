@@ -3,20 +3,12 @@ name: 🗿 Python Package
 on:
   workflow_dispatch:
     inputs:
-      push:
-        description: Push the artifact to PyPi?
-        default: false
-        type: boolean
       tag:
         description: Tag to build
         required: true
         type: string
   workflow_call:
     inputs:
-      push:
-        description: Push the artifact to PyPi?
-        default: true
-        type: boolean
       tag:
         description: Tag to build
         required: true
@@ -28,15 +20,11 @@ on:
       package:
         description: The package artifact name
         value: ${{ jobs.package.outputs.package }}
+
 jobs:
   package:
     name: Package
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: ${{ inputs.push && 'pypi' || '' }}
-      url: ${{ inputs.push && 'https://pypi.org/project/duplocloud-mcp' || '' }}
     outputs:
       version: ${{ steps.check_version.outputs.version }}
       package: ${{ steps.check_version.outputs.package }}
@@ -72,10 +60,6 @@ jobs:
 
     - name: Show Files
       run: ls -l dist
-
-    - name: Publish Package to PyPI
-      if: inputs.push == true
-      uses: pypa/gh-action-pypi-publish@release/v1
 
     - name: Github Artifact
       uses: actions/upload-artifact@v7
