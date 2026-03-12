@@ -2,7 +2,7 @@
 name = "duplocloud-mcp"
 description = "Model Context Protocol (MCP) server for DuploCloud."
 readme = "README.md"
-version = "0.1.0"
+dynamic = ["version"]
 requires-python = ">=3.10.0"
 keywords = ["duplocloud", "mcp", "ai"]
 classifiers = [
@@ -38,7 +38,7 @@ test = [
 ]
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project.urls]
@@ -47,6 +47,8 @@ Issues = "https://github.com/duplocloud/mcp/issues"
 
 [project.entry-points."duplocloud.net"]
 mcp = "duplocloud.mcp.server:DuploCloudMCP"
+
+[tool.setuptools_scm]
 
 [tool.setuptools]
 packages = ["duplocloud.mcp"]
