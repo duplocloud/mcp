@@ -176,7 +176,7 @@ class DuploCloudMCP(DuploResource):
         logger.info(f"Registering tools for: {', '.join(self._filtered_resources)}")
 
         if self.tool_mode == "compact":
-            logger.info("Compact mode: tools provided by custom tools (execute, explain, resources)")
+            logger.info("Compact mode: tools provided by custom tools (resources, explain_resource, explain_command, execute)")
         else:
             registrar = ToolRegistrar(self.mcp, self.duplo, self.command_filter)
             registrar.register(filtered)

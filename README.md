@@ -73,7 +73,7 @@ export DUPLO_TENANT="your-tenant"
 duploctl mcp
 ```
 
-By default the server starts in stdio transport with compact mode (3 tools). To use HTTP:
+By default the server starts in stdio transport with compact mode (5 tools). To use HTTP:
 
 ```bash
 duploctl mcp --transport http
@@ -124,7 +124,7 @@ The `--tool-mode` flag controls how duploctl commands are exposed as MCP tools.
 
 ### Expanded Mode
 
-Registers one tool per resource+command combination.
+Registers one tool per resource+command combination, plus the `config` tool.
 
 ```bash
 duploctl mcp --tool-mode expanded
@@ -137,7 +137,7 @@ Produces tools like `tenant_create`, `tenant_find`, `service_list`, etc. Each to
 
 ### Compact Mode
 
-**Default.** Registers four tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
+**Default.** Registers five tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
 
 ```bash
 duploctl mcp --tool-mode compact
@@ -149,6 +149,7 @@ duploctl mcp --tool-mode compact
 | `explain_resource` | List commands available on a resource |
 | `explain_command` | Show arguments and body model schema for a specific command |
 | `execute` | Run any duploctl command |
+| `config` | Display current MCP server configuration |
 
 The intended LLM workflow:
 
@@ -159,7 +160,7 @@ The intended LLM workflow:
 
 The `execute` tool accepts `name`, `args`, `body`, `query`, and `wait` parameters. It dispatches through the same `DuploClient` path as the CLI, so model validation, filtering, and formatting all work the same way.
 
-- **Pro:** Only 4 tools, works well with tool-count-limited clients
+- **Pro:** Only 5 tools, works well with tool-count-limited clients
 - **Con:** LLM needs multiple calls to discover schemas
 
 ## Filtering
@@ -325,14 +326,14 @@ def debug_info(ctx: Ctx) -> dict:
 
 ## Docker
 
-The Docker image uses `duploctl mcp` as its entrypoint. Pass arguments via `CMD` or at runtime:
+The Docker image uses `duploctl mcp` as its entrypoint with `--transport http` as the default CMD. Pass arguments at runtime to override:
 
 ```bash
-# Default (stdio transport, compact mode)
+# Default (http transport, compact mode)
 docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp
 
-# HTTP transport
-docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp --transport http
+# stdio transport
+docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp --transport stdio
 
 # Expanded mode with filters
 docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp \
@@ -347,21 +348,19 @@ docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-m
 duplocloud/mcp/
   __main__.py        # Legacy entrypoint (use duploctl mcp instead)
   app.py             # FastMCP instance and health route
-  args.py            # Declarative CLI argument definitions (legacy)
-  ctx.py             # Ctx dataclass, @custom_tool, @custom_route
+  compact_tools.py   # Compact mode tools (execute, explain, resources)
   config_display.py  # Built-in config tool and route
+  ctx.py             # Ctx dataclass, @custom_tool, @custom_route
   server.py          # DuploCloudMCP resource plugin and lifecycle coordinator
   tools.py           # ToolRegistrar (duploctl -> MCP tool conversion)
-  compact_tools.py   # Compact mode tools (execute, explain, resources)
   utils.py           # Docstring template resolution
 tests/
   conftest.py        # Shared fixtures
-  test_args.py       # Argument parsing and env var binding
   test_ctx.py        # Ctx, decorators, drain functions
   test_custom.py     # Context injection, register_custom, build_config
   test_filters.py    # Regex filter matching behavior
-  test_server.py     # DuploCloudMCP init, filter application, self-exclusion
   test_modes.py      # Expanded and compact mode tests
+  test_server.py     # DuploCloudMCP init, filter application, self-exclusion
   test_tools.py      # ToolRegistrar param building and wrapper construction
 ```
 

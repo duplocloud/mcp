@@ -2,13 +2,14 @@
 
 These custom tools only register when the server runs in compact mode.
 Inspired by the duploctl bitbucket pipe pattern, compact mode exposes
-three tools instead of one tool per resource+command:
+four tools instead of one tool per resource+command:
 
 - **resources**: List available resources matching the server's filter.
-- **explain**: Show commands for a resource with args, body model, and docs.
+- **explain_resource**: List commands available on a resource.
+- **explain_command**: Show arguments and body model schema for a command.
 - **execute**: Run any duploctl command via DuploClient dispatch.
 
-LLM workflow: resources → explain → execute.
+LLM workflow: resources → explain_resource → explain_command → execute.
 """
 
 import re
