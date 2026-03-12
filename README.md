@@ -121,6 +121,12 @@ Produces tools like `tenant_create`, `tenant_find`, `service_list`, etc. Each to
 - **Pro:** Precise schemas, easy for the LLM to call correctly
 - **Con:** Many tools (potentially hundreds), may overwhelm tool selection
 
+Use `--resource-filter` and `--command-filter` with expanded mode to keep the tool count manageable:
+
+```bash
+duploctl mcp --tool-mode expanded --resource-filter "tenant|service" --command-filter "list|find|create"
+```
+
 ### Compact Mode
 
 **Default.** Registers five tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
