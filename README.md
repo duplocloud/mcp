@@ -51,6 +51,8 @@ Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python pac
 pip install duplocloud-mcp
 ```
 
+For pinned version installs and alternative methods (GitHub release artifact, git tag), see the [release notes](https://github.com/duplocloud/mcp/releases/latest).
+
 For development:
 
 ```bash

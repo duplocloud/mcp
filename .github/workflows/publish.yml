@@ -152,13 +152,31 @@ jobs:
 
           ${{ needs.version.outputs.release-notes }}
 
+          ## Installation
+
+          PIP PyPI:
+          [duplocloud-mcp](https://pypi.org/project/duplocloud-mcp/${{ needs.package.outputs.version }}/)
+          ```sh
+          pip install duplocloud-mcp==${{ needs.package.outputs.version }}
+          ```
+
+          PIP from GitHub Release:
+          The sdist attached to this release as `duplocloud_mcp-${{ needs.package.outputs.version }}.tar.gz`.
+          ```sh
+          pip install https://github.com/${{ github.repository }}/releases/download/${{ needs.version.outputs.tag }}/duplocloud_mcp-${{ needs.package.outputs.version }}.tar.gz
+          ```
+
+          PIP from Git Tag:
+          ```sh
+          pip install git+https://github.com/${{ github.repository }}.git@${{ needs.version.outputs.tag }}
+          ```
+
           ## Docker Image
 
-          ```
+          Docker Hub: ${{ steps.registry.outputs.url }}
+          ```sh
           docker pull duplocloud/mcp:${{ needs.version.outputs.tag }}
           ```
-
-          Docker Hub: ${{ steps.registry.outputs.url }}
 
     - name: Summary
       run: |

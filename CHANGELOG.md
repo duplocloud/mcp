@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.3] - 2026-03-12
-
 ### Added 
 
 - Updated GitHub workflow action versions to current stable tags (artifact actions, Docker Hub description, and auto-assign).
@@ -16,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added the validation to the compact mdoe as well
 - allow filtering per execution
 - better explain tool
+- full publish pipeline
 
 ## [0.0.2] - 2026-02-26
 
