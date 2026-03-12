@@ -28,15 +28,12 @@ on:
       package:
         description: The package artifact name
         value: ${{ jobs.package.outputs.package }}
-    secrets:
-      PYPI_API_TOKEN:
-        description: PyPi token
-        required: true
-
 jobs:
   package:
     name: Package
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     environment:
       name: ${{ inputs.push && 'pypi' || '' }}
       url: ${{ inputs.push && 'https://pypi.org/project/duplocloud-mcp' || '' }}
@@ -79,8 +76,6 @@ jobs:
     - name: Publish Package to PyPI
       if: inputs.push == true
       uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
 
     - name: Github Artifact
       uses: actions/upload-artifact@v7

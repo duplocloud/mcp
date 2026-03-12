@@ -19,6 +19,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  id-token: write
+
 jobs:
 
   test:
@@ -82,8 +85,6 @@ jobs:
     with:
       tag: ${{ inputs.push && needs.version.outputs.tag || '' }}
       push: ${{ inputs.push }}
-    secrets:
-      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN || '' }}
 
   release:
     name: Release
