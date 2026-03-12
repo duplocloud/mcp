@@ -11,8 +11,6 @@ Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python pac
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-  - [Environment Variables](#environment-variables)
-  - [CLI Arguments](#cli-arguments)
 - [Tool Modes](#tool-modes)
   - [Expanded Mode](#expanded-mode)
   - [Compact Mode](#compact-mode)
@@ -93,30 +91,18 @@ curl http://localhost:8000/config
 
 Every setting can be provided as a CLI argument or an environment variable. CLI arguments take precedence.
 
-### Environment Variables
+| Flag | Env Variable | Default | Description |
+|---|---|---|---|
+| `-H` | `DUPLO_HOST` | -- | DuploCloud portal URL (required) |
+| `-t` | `DUPLO_TOKEN` | -- | Authentication token (required) |
+| `-T` | `DUPLO_TENANT` | -- | Tenant name (optional but recommended) |
+| `-tp`, `--transport` | `DUPLO_MCP_TRANSPORT` | `stdio` | Transport protocol (`stdio` or `http`) |
+| `-mp`, `--port` | `DUPLO_MCP_PORT` | `8000` | Port for HTTP transport |
+| `--resource-filter` | `DUPLO_MCP_RESOURCE_FILTER` | `.*` | Regex filter for resource names |
+| `--command-filter` | `DUPLO_MCP_COMMAND_FILTER` | `.*` | Regex filter for command names |
+| `--tool-mode` | `DUPLO_MCP_TOOL_MODE` | `compact` | Tool registration mode (`compact` or `expanded`) |
 
-| Variable | Default | Description |
-|---|---|---|
-| `DUPLO_HOST` | -- | DuploCloud portal URL (required) |
-| `DUPLO_TOKEN` | -- | Authentication token (required) |
-| `DUPLO_TENANT` | -- | Tenant name (optional but recommended) |
-| `DUPLO_MCP_TRANSPORT` | `stdio` | Transport protocol (`stdio` or `http`) |
-| `DUPLO_MCP_PORT` | `8000` | Port for HTTP transport |
-| `DUPLO_MCP_RESOURCE_FILTER` | `.*` | Regex filter for resource names |
-| `DUPLO_MCP_COMMAND_FILTER` | `.*` | Regex filter for command names |
-| `DUPLO_MCP_TOOL_MODE` | `compact` | Tool registration mode (`compact` or `expanded`) |
-
-### CLI Arguments
-
-```
-duploctl mcp [--transport {stdio,http}]
-             [--port PORT]
-             [--resource-filter PATTERN]
-             [--command-filter PATTERN]
-             [--tool-mode {expanded,compact}]
-```
-
-All `duploctl` global arguments (`-H`, `-t`, `-T`, etc.) are also accepted and passed through to the DuploCloud client.
+All [duploctl global arguments](https://cli.duplocloud.com/Args/) (`-H`, `-t`, `-T`, etc.) are also accepted and passed through to the DuploCloud client. The output flag (`-o`) is ignored as it does not apply in the MCP context. The query flag (`-q`) is available per tool call via the `execute` tool's `query` parameter.
 
 ## Tool Modes
 
