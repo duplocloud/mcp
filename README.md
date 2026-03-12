@@ -37,7 +37,7 @@ Built on [FastMCP](https://gofastmcp.com) and the `duplocloud-client` Python pac
 - **Pydantic model integration** -- commands with models get typed input schemas instead of raw dicts
 - **Config display** -- built-in `config` tool and `GET /config` route showing live server state
 - **Custom tool/route framework** -- `@custom_tool` and `@custom_route` decorators with context injection
-- **Dual transport** -- HTTP (default) or stdio for embedded use
+- **Dual transport** -- stdio (default) or HTTP for persistent servers
 
 ## Prerequisites
 
@@ -71,7 +71,11 @@ export DUPLO_TENANT="your-tenant"
 duploctl mcp
 ```
 
-The server starts on `http://localhost:8000` with all available tools registered.
+By default the server starts in stdio transport with compact mode (3 tools). To use HTTP:
+
+```bash
+duploctl mcp --transport http
+```
 
 Verify it's running:
 
@@ -93,12 +97,12 @@ Every setting can be provided as a CLI argument or an environment variable. CLI 
 |---|---|---|
 | `DUPLO_HOST` | -- | DuploCloud portal URL (required) |
 | `DUPLO_TOKEN` | -- | Authentication token (required) |
-| `DUPLO_TENANT` | -- | Tenant name (required) |
-| `DUPLO_MCP_TRANSPORT` | `http` | Transport protocol (`http` or `stdio`) |
+| `DUPLO_TENANT` | -- | Tenant name (optional but recommended) |
+| `DUPLO_MCP_TRANSPORT` | `stdio` | Transport protocol (`stdio` or `http`) |
 | `DUPLO_MCP_PORT` | `8000` | Port for HTTP transport |
 | `DUPLO_MCP_RESOURCE_FILTER` | `.*` | Regex filter for resource names |
 | `DUPLO_MCP_COMMAND_FILTER` | `.*` | Regex filter for command names |
-| `DUPLO_MCP_TOOL_MODE` | `expanded` | Tool registration mode (`expanded` or `compact`) |
+| `DUPLO_MCP_TOOL_MODE` | `compact` | Tool registration mode (`compact` or `expanded`) |
 
 ### CLI Arguments
 
@@ -118,7 +122,7 @@ The `--tool-mode` flag controls how duploctl commands are exposed as MCP tools.
 
 ### Expanded Mode
 
-**Default.** Registers one tool per resource+command combination.
+Registers one tool per resource+command combination.
 
 ```bash
 duploctl mcp --tool-mode expanded
@@ -131,7 +135,7 @@ Produces tools like `tenant_create`, `tenant_find`, `service_list`, etc. Each to
 
 ### Compact Mode
 
-Registers three tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
+**Default.** Registers four tools total, inspired by the [duploctl bitbucket pipe](https://github.com/duplocloud/duploctl-pipe).
 
 ```bash
 duploctl mcp --tool-mode compact
@@ -140,19 +144,20 @@ duploctl mcp --tool-mode compact
 | Tool | Purpose |
 |---|---|
 | `resources` | List available resources (filtered) |
-| `explain` | Show commands, arguments, and body model fields for a resource |
+| `explain_resource` | List commands available on a resource |
+| `explain_command` | Show arguments and body model schema for a specific command |
 | `execute` | Run any duploctl command |
 
 The intended LLM workflow:
 
 1. **`resources`** -- get the list of available resources
-2. **`explain(resource)`** -- see what commands are available
-3. **`explain(resource, command)`** -- see argument details and body schema
+2. **`explain_resource(resource)`** -- see what commands are available
+3. **`explain_command(resource, command)`** -- see argument details and body schema
 4. **`execute(resource, command, ...)`** -- run the command
 
-The `execute` tool accepts `name`, `body`, `args`, `query`, `output`, and `wait` parameters. It dispatches through the same `DuploClient` path as the CLI, so model validation, filtering, and formatting all work the same way.
+The `execute` tool accepts `name`, `args`, `body`, `query`, and `wait` parameters. It dispatches through the same `DuploClient` path as the CLI, so model validation, filtering, and formatting all work the same way.
 
-- **Pro:** Only 3 tools, works well with tool-count-limited clients
+- **Pro:** Only 4 tools, works well with tool-count-limited clients
 - **Con:** LLM needs multiple calls to discover schemas
 
 ## Filtering
@@ -210,9 +215,33 @@ Result: `tenant_list`, `tenant_find`, `service_list`, `service_find`.
 
 ## MCP Client Configuration
 
-### Claude Code / VS Code
+### stdio Transport (Default)
 
-Add to your `.mcp.json` (project root) or `.vscode/mcp.json`:
+For most MCP clients (Claude Code, VS Code, etc.), use stdio transport. Add to your `.mcp.json` (project root) or `.vscode/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "duploctl": {
+      "command": "duploctl",
+      "args": ["mcp"],
+      "env": {
+        "DUPLO_HOST": "https://your-portal.duplocloud.net",
+        "DUPLO_TOKEN": "your-token",
+        "DUPLO_TENANT": "your-tenant"
+      }
+    }
+  }
+}
+```
+
+### HTTP Transport
+
+For clients that connect over HTTP (persistent server):
+
+```bash
+duploctl mcp --transport http
+```
 
 ```json
 {
@@ -225,30 +254,6 @@ Add to your `.mcp.json` (project root) or `.vscode/mcp.json`:
 }
 ```
 
-### stdio Transport
-
-For clients that expect stdio transport (the server communicates over stdin/stdout):
-
-```bash
-duploctl mcp --transport stdio
-```
-
-```json
-{
-  "mcpServers": {
-    "duploctl": {
-      "command": "duploctl",
-      "args": ["mcp", "--transport", "stdio"],
-      "env": {
-        "DUPLO_HOST": "https://your-portal.duplocloud.net",
-        "DUPLO_TOKEN": "your-token",
-        "DUPLO_TENANT": "your-tenant"
-      }
-    }
-  }
-}
-```
-
 ### With Filters
 
 ```json
@@ -256,7 +261,7 @@ duploctl mcp --transport stdio
   "mcpServers": {
     "duploctl": {
       "command": "duploctl",
-      "args": ["mcp", "--transport", "stdio", "--resource-filter", "tenant|service"],
+      "args": ["mcp", "--resource-filter", "tenant|service"],
       "env": {
         "DUPLO_HOST": "https://your-portal.duplocloud.net",
         "DUPLO_TOKEN": "your-token",
@@ -321,15 +326,15 @@ def debug_info(ctx: Ctx) -> dict:
 The Docker image uses `duploctl mcp` as its entrypoint. Pass arguments via `CMD` or at runtime:
 
 ```bash
-# Default (http transport)
+# Default (stdio transport, compact mode)
 docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp
 
-# Override transport
-docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp --transport stdio
+# HTTP transport
+docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp --transport http
 
-# Compact mode with filters
+# Expanded mode with filters
 docker run -e DUPLO_HOST=... -e DUPLO_TOKEN=... -e DUPLO_TENANT=... duplocloud-mcp \
-  --tool-mode compact --resource-filter "tenant|service"
+  --tool-mode expanded --resource-filter "tenant|service"
 ```
 
 ## Development
