@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Proxy DuploCloud documentation MCP as a backend; disable with `--no-docs` or `DUPLO_MCP_DOCS=false`
+
 ## [0.1.4] - 2026-03-12
 
 ### Added 
