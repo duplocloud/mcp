@@ -9,6 +9,7 @@ It does not know how tool wrapping, signature rewriting, or model resolution
 works -- that is delegated to ToolRegistrar.
 """
 
+import argparse
 import asyncio
 import inspect
 import re
@@ -24,6 +25,7 @@ from . import compact_tools as _compact_tools  # noqa: F401
 from . import config_display as _config_display  # noqa: F401
 from .app import mcp as mcp_app
 from .ctx import Ctx, drain_routes, drain_tools
+from .docs import mount_docs
 from .tools import ToolRegistrar
 
 logger = get_logger(__name__)
@@ -74,6 +76,15 @@ TOOL_MODE = Arg(
     env="DUPLO_MCP_TOOL_MODE",
 )
 
+DOCS = Arg(
+    "docs", "-dc",
+    type=bool,
+    help="Enable the DuploCloud documentation MCP proxy",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    env="DUPLO_MCP_DOCS",
+)
+
 
 # ---------------------------------------------------------------------------
 # Resource plugin
@@ -97,6 +108,7 @@ class DuploCloudMCP(DuploResource):
         self.resource_filter = re.compile(".*")
         self.command_filter = re.compile(".*")
         self.tool_mode = "compact"
+        self.docs = True
 
     def __call__(self, *args):
         """Parse CLI args and start the MCP server.
@@ -116,6 +128,7 @@ class DuploCloudMCP(DuploResource):
         resource_filter: RESOURCE_FILTER,
         command_filter: COMMAND_FILTER,
         tool_mode: TOOL_MODE,
+        docs: DOCS,
     ):
         """Start the MCP server.
 
@@ -132,10 +145,16 @@ class DuploCloudMCP(DuploResource):
             self.command_filter = re.compile(command_filter)
         if tool_mode is not None:
             self.tool_mode = tool_mode
+        if docs is not None:
+            self.docs = docs
 
         self.duplo.validate = self.tool_mode == "compact"
 
         self.register_tools()
+        if self.docs:
+            mount_docs(self.mcp)
+        else:
+            logger.info("Documentation proxy disabled (--no-docs)")
         self._start_transport()
 
     # ------------------------------------------------------------------
