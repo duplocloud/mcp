@@ -13,7 +13,7 @@ classifiers = [
 authors = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
 maintainers = [{ name = "DuploCloud", email = "support@duplocloud.net" }]
 dependencies = [
-  "fastmcp>=2.14.0,<4",
+  "fastmcp>=3.1.0,<4",
   "authlib>=1.6.6",
   "jinja2",
   "duplocloud-client>=0.4.2",
