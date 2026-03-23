@@ -7,6 +7,21 @@ Registers ``mcp`` as a duploctl resource so the server can be launched via::
 DuploCloudMCP knows about transport, ports, and which resources to register.
 It does not know how tool wrapping, signature rewriting, or model resolution
 works -- that is delegated to ToolRegistrar.
+
+Mode system
+-----------
+Three modes are available via ``--tool-mode``:
+
+- **expanded**: All duploctl commands registered as individual tools (250+).
+  The LLM sees the full catalog upfront.
+- **compact**: Four generic tools (resources, explain_resource, explain_command,
+  execute). Token-light discovery with multiple round-trips.
+- **search**: Same underlying registration as expanded, but a BM25SearchTransform
+  is applied so the LLM sees only ``search_tools`` + ``call_tool`` + pinned
+  tools instead of the full catalog. Best of both worlds.
+
+Adding a new mode: add one entry to MODE_CONFIG. ``register_tools()`` reads
+the config generically — no if/else chains needed.
 """
 
 import argparse
@@ -19,6 +34,7 @@ from duplocloud.argtype import Arg
 from duplocloud.controller import DuploCtl
 from duplocloud.commander import Command, Resource, available_resources, load_format
 from duplocloud.resource import DuploResource
+from fastmcp.server.transforms.search import BM25SearchTransform
 from fastmcp.utilities.logging import get_logger
 
 from . import compact_tools as _compact_tools  # noqa: F401
@@ -33,6 +49,45 @@ logger = get_logger(__name__)
 # Resources that must never be registered as MCP tools.
 # "mcp" is excluded to prevent the server from registering itself.
 _EXCLUDED_RESOURCES = {"mcp"}
+
+# ---------------------------------------------------------------------------
+# Mode configuration table
+# ---------------------------------------------------------------------------
+#
+# Each entry specifies:
+#   use_registrar: bool  — whether to use ToolRegistrar to register all commands
+#   transform:     callable | None — called as transform() to produce a FastMCP
+#                  Transform, or None for no transform
+#   validate:      bool  — value for duplo.validate (compact needs it True so
+#                  the generic execute tool gets proper schema validation)
+#
+# Adding a new mode: add one row here. register_tools() reads this generically.
+
+def _search_transform() -> BM25SearchTransform:
+    """Factory for the search mode BM25 transform with project-specific defaults."""
+    return BM25SearchTransform(
+        max_results=7,
+        always_visible=["config"],
+    )
+
+
+MODE_CONFIG: dict[str, dict] = {
+    "expanded": {
+        "use_registrar": True,
+        "transform": None,
+        "validate": False,
+    },
+    "compact": {
+        "use_registrar": False,
+        "transform": None,
+        "validate": True,
+    },
+    "search": {
+        "use_registrar": True,
+        "transform": _search_transform,
+        "validate": False,
+    },
+}
 
 # ---------------------------------------------------------------------------
 # MCP-specific Arg types
@@ -70,9 +125,9 @@ COMMAND_FILTER = Arg(
 
 TOOL_MODE = Arg(
     "tool_mode", "--tool-mode",
-    help="Tool registration mode: expanded or compact",
+    help="Tool registration mode: expanded, compact, or search",
     default="compact",
-    choices=["expanded", "compact"],
+    choices=["expanded", "compact", "search"],
     env="DUPLO_MCP_TOOL_MODE",
 )
 
@@ -148,7 +203,7 @@ class DuploCloudMCP(DuploResource):
         if docs is not None:
             self.docs = docs
 
-        self.duplo.validate = self.tool_mode == "compact"
+        self.duplo.validate = MODE_CONFIG[self.tool_mode]["validate"]
 
         self.register_tools()
         if self.docs:
@@ -194,11 +249,20 @@ class DuploCloudMCP(DuploResource):
         self._filtered_resources = sorted(filtered)
         logger.info(f"Registering tools for: {', '.join(self._filtered_resources)}")
 
-        if self.tool_mode == "compact":
-            logger.info("Compact mode: tools provided by custom tools (resources, explain_resource, explain_command, execute)")
-        else:
+        mode_cfg = MODE_CONFIG[self.tool_mode]
+
+        if mode_cfg["use_registrar"]:
             registrar = ToolRegistrar(self.mcp, self.duplo, self.command_filter)
             registrar.register(filtered)
+        else:
+            logger.info(
+                f"{self.tool_mode.capitalize()} mode: tools provided by custom tools"
+            )
+
+        if mode_cfg["transform"] is not None:
+            transform = mode_cfg["transform"]()
+            self.mcp.add_transform(transform)
+            logger.info(f"Applied {type(transform).__name__} for {self.tool_mode} mode")
 
         # Register custom tools and routes, injecting context
         self.register_custom(mode=self.tool_mode)
